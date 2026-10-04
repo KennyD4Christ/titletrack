@@ -1,0 +1,9 @@
+asgiref==3.12.1
+Django==5.2.17
+django-environ==0.14.0
+django-filter==26.1
+djangorestframework==3.18.1
+psycopg==3.3.6
+psycopg-binary==3.3.6
+sqlparse==0.6.0
+typing_extensions==4.16.0
