@@ -1,0 +1,168 @@
+from decimal import Decimal
+
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+from django.db.models import Q
+from django.utils import timezone
+
+
+class Company(models.Model):
+    name = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+class Department(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="departments")
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["company", "name"], name="uniq_department_per_company")
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class User(AbstractUser):
+    class Role(models.TextChoices):
+        MD = "md", "MD / Director"
+        MANAGER = "manager", "Documentation / Operations manager"
+        STAFF = "staff", "Staff"
+        SALES = "sales", "Sales"
+        VIEWER = "viewer", "Viewer"
+
+    company = models.ForeignKey(Company, null=True, blank=True, on_delete=models.CASCADE, related_name="users")
+    department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL, related_name="members")
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.STAFF)
+
+
+class Estate(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="estates")
+    name = models.CharField(max_length=200)
+    location = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["company", "name"], name="uniq_estate_per_company")]
+
+    def __str__(self):
+        return self.name
+
+
+class Plot(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="plots")
+    estate = models.ForeignKey(Estate, on_delete=models.CASCADE, related_name="plots")
+    plot_number = models.CharField(max_length=50)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["estate", "plot_number"], name="uniq_plot_per_estate")]
+
+    def __str__(self):
+        return f"{self.estate.name} / {self.plot_number}"
+
+
+class Buyer(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="buyers")
+    full_name = models.CharField(max_length=200)
+    phone = models.CharField(max_length=40, blank=True)
+    email = models.EmailField(blank=True)
+
+    def __str__(self):
+        return self.full_name
+
+
+class Sale(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        CANCELLED = "cancelled", "Cancelled"
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="sales")
+    plot = models.ForeignKey(Plot, on_delete=models.PROTECT, related_name="sales")
+    buyer = models.ForeignKey(Buyer, on_delete=models.PROTECT, related_name="sales")
+    price = models.DecimalField(max_digits=14, decimal_places=2)
+    amount_paid = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
+    sale_date = models.DateField()
+    fully_paid_on = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+
+    class Meta:
+        constraints = [
+            # A plot can have only one ACTIVE sale. Cancelled sales do not block a resale.
+            models.UniqueConstraint(
+                fields=["plot"], condition=Q(status="active"), name="one_active_sale_per_plot"
+            ),
+            models.CheckConstraint(condition=Q(amount_paid__gte=0), name="sale_amount_paid_non_negative"),
+        ]
+
+    @property
+    def is_fully_paid(self):
+        return self.amount_paid >= self.price
+
+
+class ObligationType(models.Model):
+    class Trigger(models.TextChoices):
+        ON_SALE = "on_sale", "When the sale is created"
+        ON_FULL_PAYMENT = "on_full_payment", "When the buyer is fully paid"
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="obligation_types")
+    name = models.CharField(max_length=120)
+    trigger = models.CharField(max_length=20, choices=Trigger.choices, default=Trigger.ON_FULL_PAYMENT)
+    sla_days = models.PositiveIntegerField(default=90)
+    default_department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["company", "name"], name="uniq_obltype_per_company")]
+
+    def __str__(self):
+        return self.name
+
+
+class Obligation(models.Model):
+    class Status(models.TextChoices):
+        NOT_STARTED = "not_started", "Not started"
+        IN_PROGRESS = "in_progress", "In progress"
+        AWAITING_EXTERNAL = "awaiting_external", "Awaiting external party"
+        COMPLETED = "completed", "Completed"
+        NOT_APPLICABLE = "not_applicable", "Not applicable"
+
+    OPEN_STATUSES = (Status.NOT_STARTED, Status.IN_PROGRESS, Status.AWAITING_EXTERNAL)
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="obligations")
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="obligations")
+    obligation_type = models.ForeignKey(ObligationType, on_delete=models.PROTECT, related_name="obligations")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_STARTED)
+    stage = models.CharField(max_length=120, blank=True)
+    owner = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="owned_obligations")
+    department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL)
+    external_party = models.CharField(max_length=200, blank=True)
+    reason = models.TextField(blank=True)
+    next_action = models.TextField(blank=True)
+    next_review_date = models.DateField(null=True, blank=True)
+    started_on = models.DateField()
+    due_date = models.DateField(null=True, blank=True)
+    completed_on = models.DateField(null=True, blank=True)
+    # Last HUMAN update. System saves must not touch this, or stale flags become meaningless.
+    last_updated_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["sale", "obligation_type"], name="one_obligation_per_sale_and_type")
+        ]
+        indexes = [models.Index(fields=["company", "status"]), models.Index(fields=["company", "due_date"])]
+
+
+class ObligationEvent(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    obligation = models.ForeignKey(Obligation, on_delete=models.CASCADE, related_name="events")
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+    changes = models.JSONField(default=dict, blank=True)
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
