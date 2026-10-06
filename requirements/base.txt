@@ -3,3 +3,4 @@ djangorestframework
 django-filter
 django-environ
 psycopg[binary]
+openpyxl

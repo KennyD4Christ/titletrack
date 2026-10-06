@@ -2,6 +2,8 @@ from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from api.views.auth import CsrfView, LoginView, LogoutView, MeView
+from api.views.imports import ImportBatchViewSet
+from api.views.obligations import ObligationTypeViewSet, ObligationViewSet
 from api.views.reference import (
     BuyerViewSet, DepartmentViewSet, EstateViewSet, PlotViewSet, SaleViewSet, UserViewSet,
 )
@@ -13,6 +15,9 @@ router.register("buyers", BuyerViewSet, basename="buyer")
 router.register("sales", SaleViewSet, basename="sale")
 router.register("departments", DepartmentViewSet, basename="department")
 router.register("users", UserViewSet, basename="user")
+router.register("obligation-types", ObligationTypeViewSet, basename="obligation-type")
+router.register("obligations", ObligationViewSet, basename="obligation")
+router.register("imports", ImportBatchViewSet, basename="import")
 
 urlpatterns = [
     path("auth/csrf/", CsrfView.as_view(), name="auth-csrf"),

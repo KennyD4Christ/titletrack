@@ -44,6 +44,7 @@ class Estate(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="estates")
     name = models.CharField(max_length=200)
     location = models.CharField(max_length=200, blank=True)
+    import_batch = models.ForeignKey("ImportBatch", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["company", "name"], name="uniq_estate_per_company")]
@@ -56,6 +57,7 @@ class Plot(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="plots")
     estate = models.ForeignKey(Estate, on_delete=models.CASCADE, related_name="plots")
     plot_number = models.CharField(max_length=50)
+    import_batch = models.ForeignKey("ImportBatch", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["estate", "plot_number"], name="uniq_plot_per_estate")]
@@ -69,6 +71,7 @@ class Buyer(models.Model):
     full_name = models.CharField(max_length=200)
     phone = models.CharField(max_length=40, blank=True)
     email = models.EmailField(blank=True)
+    import_batch = models.ForeignKey("ImportBatch", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
 
     def __str__(self):
         return self.full_name
@@ -87,6 +90,7 @@ class Sale(models.Model):
     sale_date = models.DateField()
     fully_paid_on = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
+    import_batch = models.ForeignKey("ImportBatch", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
 
     class Meta:
         constraints = [
@@ -166,3 +170,35 @@ class ObligationEvent(models.Model):
 
     class Meta:
         ordering = ["created_at", "id"]
+
+
+class ImportBatch(models.Model):
+    """One spreadsheet import: the parsed file, how columns were mapped, the dry-run report and the outcome."""
+
+    class Status(models.TextChoices):
+        UPLOADED = "uploaded", "Uploaded"
+        MAPPED = "mapped", "Mapped"
+        VALIDATED = "validated", "Dry run done"
+        COMMITTED = "committed", "Imported"
+        UNDONE = "undone", "Undone"
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="import_batches")
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    filename = models.CharField(max_length=255)
+    sheet_name = models.CharField(max_length=200, blank=True)
+    sheets = models.JSONField(default=list, blank=True)
+    file_sha256 = models.CharField(max_length=64, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.UPLOADED)
+    headers = models.JSONField(default=list)
+    rows = models.JSONField(default=list)            # [{"n": sheet row number, "v": [cell values]}]
+    row_count = models.PositiveIntegerField(default=0)
+    mapping = models.JSONField(default=dict, blank=True)
+    status_mapping = models.JSONField(default=dict, blank=True)
+    report = models.JSONField(default=dict, blank=True)
+    counts = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    committed_at = models.DateTimeField(null=True, blank=True)
+    undone_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

@@ -1,4 +1,4 @@
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from tracker.models import User
 
@@ -45,10 +45,39 @@ class IsCompanyUser(BasePermission):
 
 
 class ActionPermission(BasePermission):
-    """Views declare `required_action`. A view that forgets to declare one is DENIED (fail closed)."""
+    """Views declare what they need. A view that declares nothing, or leaves an action unmapped, is DENIED.
+
+    - `required_action = "name"`            one action for the whole view, or
+    - `required_actions = {"list": "name"}` a map from the ViewSet action to the action it needs.
+    """
 
     def has_permission(self, request, view):
-        action = getattr(view, "required_action", None)
+        mapping = getattr(view, "required_actions", None)
+        if mapping is not None:
+            view_action = getattr(view, "action", None)
+            if view_action is None:
+                # The HTTP method has no handler on this viewset (e.g. DELETE on a list that is not
+                # deletable). Let a logged-in company user receive the honest 405; nothing runs.
+                user = request.user
+                return bool(user and user.is_authenticated and user.company_id)
+            action = mapping.get(view_action)
+        else:
+            action = getattr(view, "required_action", None)
         if action is None:
             return False
         return can(request.user, action)
+
+
+class CanEditObligation(BasePermission):
+    """Object-level rule on top of the role matrix.
+    MD and Manager may edit any obligation; Staff only their own, or their department's."""
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in SAFE_METHODS:
+            return True
+        user = request.user
+        if user.role in (MD, MANAGER):
+            return True
+        if user.role == STAFF:
+            return obj.owner_id == user.id or (user.department_id is not None and obj.department_id == user.department_id)
+        return False

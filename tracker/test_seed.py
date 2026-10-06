@@ -35,19 +35,21 @@ class SeedDemoTests(TestCase):
         self.assertGreater(Obligation.objects.filter(company=co, status="completed").count(), 0)
 
     def test_every_obligation_has_coherent_history(self):
-        seed()
-        co = Company.objects.get(name="Demo Homes")
-        now = timezone.now()
-        for ob in Obligation.objects.filter(company=co):
-            events = list(ob.events.all())
-            self.assertTrue(events, ob.pk)
-            self.assertLessEqual(ob.last_updated_at, now)
-            for ev in events:
-                self.assertGreaterEqual(timezone.localtime(ev.created_at).date(), ob.started_on)
-                self.assertLessEqual(ev.created_at, now)
-            if ob.status == "completed":
-                self.assertIsNotNone(ob.completed_on)
-                self.assertGreaterEqual(ob.completed_on, ob.started_on)
+        # Time is frozen so this test cannot be affected by the machine clock (e.g. a WSL clock step).
+        frozen = datetime(2026, 10, 5, 11, 0, tzinfo=dt_timezone.utc)
+        with patch("django.utils.timezone.now", return_value=frozen):
+            seed()
+            co = Company.objects.get(name="Demo Homes")
+            for ob in Obligation.objects.filter(company=co):
+                events = list(ob.events.all())
+                self.assertTrue(events, ob.pk)
+                self.assertLessEqual(ob.last_updated_at, frozen)
+                for ev in events:
+                    self.assertGreaterEqual(timezone.localtime(ev.created_at).date(), ob.started_on)
+                    self.assertLessEqual(ev.created_at, frozen)
+                if ob.status == "completed":
+                    self.assertIsNotNone(ob.completed_on)
+                    self.assertGreaterEqual(ob.completed_on, ob.started_on)
 
     def test_same_seed_gives_same_data(self):
         seed(company="Demo One", seed=7)
@@ -56,6 +58,9 @@ class SeedDemoTests(TestCase):
         b = Company.objects.get(name="Demo Two")
         self.assertEqual(services.exposure(a), services.exposure(b))
         self.assertEqual(services.ageing(a), services.ageing(b))
+        def shape(company):
+            return sorted(Obligation.objects.filter(company=company).values_list("obligation_type__name", "status", "started_on"))
+        self.assertEqual(shape(a), shape(b))
 
     def test_demo_users_exist_and_log_in_with_given_password(self):
         seed()
