@@ -11,7 +11,7 @@ from api.serializers.obligations import (
     ObligationTypeSerializer, ObligationUpdateSerializer,
 )
 from tracker import services
-from tracker.models import Department, Obligation, ObligationType, User
+from tracker.models import Department, Obligation, ObligationType, Sale, User
 
 
 class ObligationTypeViewSet(
@@ -43,6 +43,13 @@ class ObligationViewSet(CompanyScopedMixin, mixins.ListModelMixin, mixins.Retrie
     filterset_class = ObligationFilter
     ordering_fields = ["due_date", "started_on", "last_updated_at", "status"]
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        include = str(self.request.query_params.get("include_cancelled", "")).lower() in ("1", "true", "yes")
+        if self.action == "list" and not include:
+            qs = qs.filter(sale__status=Sale.Status.ACTIVE)       # cancelled sales: audit only, off the work lists
+        return qs
+
     def get_serializer_class(self):
         return ObligationListSerializer if self.action == "list" else ObligationDetailSerializer
 
@@ -52,7 +59,10 @@ class ObligationViewSet(CompanyScopedMixin, mixins.ListModelMixin, mixins.Retrie
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
         note = data.pop("note", "")
-        services.update_obligation(obligation, request.user, note=note, **data)   # the ONLY write path
+        try:
+            services.update_obligation(obligation, request.user, note=note, **data)   # the ONLY write path
+        except services.SaleStateError as exc:
+            return Response({"detail": str(exc)}, status=409)
         fresh = self.get_queryset().get(pk=obligation.pk)
         return Response(ObligationDetailSerializer(fresh, context=self.get_serializer_context()).data)
 

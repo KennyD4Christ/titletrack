@@ -2,15 +2,20 @@
 Used by the API (and later the dashboards) so every screen uses the same definitions."""
 from datetime import timedelta
 
-from .models import Obligation
+from .models import Obligation, Sale
 
 # "Last updated" colour bands. RED matches services.stale(): not updated for MORE than 14 days.
 STALE_AMBER_DAYS = 7
 STALE_RED_DAYS = 14
 
 
+def is_cancelled(ob):
+    return ob.sale.status == Sale.Status.CANCELLED
+
+
 def is_open(ob):
-    return ob.status in Obligation.OPEN_STATUSES
+    """Active work: an open obligation on an active sale (obligations of cancelled sales are never 'open')."""
+    return ob.status in Obligation.OPEN_STATUSES and ob.sale.status == Sale.Status.ACTIVE
 
 
 def days_outstanding(ob, today):

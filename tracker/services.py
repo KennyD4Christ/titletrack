@@ -8,6 +8,10 @@ from django.utils import timezone
 
 from .models import Obligation, ObligationEvent, ObligationType, Sale
 
+
+class SaleStateError(Exception):
+    """The sale is in the wrong state for this action (for example: editing a cancelled sale's obligations)."""
+
 TRACKED_FIELDS = (
     "status", "stage", "owner", "department", "external_party",
     "reason", "next_action", "next_review_date",
@@ -87,6 +91,8 @@ def update_obligation(obligation, actor, note="", **changes):
     obligation = Obligation.objects.select_for_update().get(pk=obligation.pk)
     if actor.company_id != obligation.company_id:
         raise PermissionDenied("Obligation belongs to another company.")
+    if obligation.sale.status != Sale.Status.ACTIVE:
+        raise SaleStateError("This sale is cancelled, so its obligations are read-only.")
     diff = {}
     for field, new in changes.items():
         if field not in TRACKED_FIELDS:
@@ -112,7 +118,10 @@ def update_obligation(obligation, actor, note="", **changes):
 # ---------- reads (all scoped by company) ----------
 
 def open_obligations(company):
-    return Obligation.objects.filter(company=company, status__in=Obligation.OPEN_STATUSES)
+    """ACTIVE WORK: an open obligation on an ACTIVE sale. Obligations of cancelled sales are kept for
+    audit but never counted here, so every queue, overdue, stale, ageing and exposure figure ignores them."""
+    return Obligation.objects.filter(
+        company=company, status__in=Obligation.OPEN_STATUSES, sale__status=Sale.Status.ACTIVE)
 
 
 def exposure(company, fully_paid_only=False):
@@ -169,3 +178,51 @@ def who_has_the_ball(company, today=None):
         .annotate(open=Count("id"), late=Count("id", filter=Q(due_date__lt=today)))
         .order_by("-late", "-open")
     )
+
+
+# ---------- cancelling and reinstating a sale ----------
+
+@transaction.atomic
+def cancel_sale(sale, actor, reason):
+    """Cancel a sale. Its obligations are NOT changed (they keep the state they had) but leave all
+    active-work counts and become read-only. Who/when/why is recorded on the sale and in each
+    obligation's history."""
+    reason = (reason or "").strip()
+    if len(reason) < 3:
+        raise ValueError("A reason for the cancellation is required.")
+    sale = Sale.objects.select_for_update().get(pk=sale.pk)
+    if actor.company_id != sale.company_id:
+        raise PermissionDenied("Sale belongs to another company.")
+    if sale.status != Sale.Status.ACTIVE:
+        raise SaleStateError("This sale is already cancelled.")
+    sale.status = Sale.Status.CANCELLED
+    sale.cancelled_at = timezone.now()
+    sale.cancelled_by = actor
+    sale.cancel_reason = reason
+    sale.save(update_fields=["status", "cancelled_at", "cancelled_by", "cancel_reason"])
+    ObligationEvent.objects.bulk_create([
+        ObligationEvent(company=sale.company, obligation=ob, actor=actor, note=f"Sale cancelled: {reason}")
+        for ob in sale.obligations.all()
+    ])
+    return sale
+
+
+@transaction.atomic
+def reinstate_sale(sale, actor, note=""):
+    """Undo a mistaken cancellation. Only possible while the plot has not been sold again."""
+    sale = Sale.objects.select_for_update().get(pk=sale.pk)
+    if actor.company_id != sale.company_id:
+        raise PermissionDenied("Sale belongs to another company.")
+    if sale.status != Sale.Status.CANCELLED:
+        raise SaleStateError("Only a cancelled sale can be reinstated.")
+    if Sale.objects.filter(plot=sale.plot, status=Sale.Status.ACTIVE).exists():
+        raise SaleStateError("The plot has been sold again, so this cancelled sale cannot be reinstated.")
+    sale.status = Sale.Status.ACTIVE
+    sale.cancelled_at, sale.cancelled_by, sale.cancel_reason = None, None, ""
+    sale.save(update_fields=["status", "cancelled_at", "cancelled_by", "cancel_reason"])
+    text = f"Sale reinstated: {note.strip()}" if (note or "").strip() else "Sale reinstated"
+    ObligationEvent.objects.bulk_create([
+        ObligationEvent(company=sale.company, obligation=ob, actor=actor, note=text)
+        for ob in sale.obligations.all()
+    ])
+    return sale

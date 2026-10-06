@@ -14,6 +14,8 @@ ALL_ROLES = {MD, MANAGER, STAFF, SALES, VIEWER}
 # are added in Week 2 on top of this role check.
 MATRIX = {
     "view_reference": ALL_ROLES,
+    "view_home": ALL_ROLES,
+    "view_my_queue": {MD, MANAGER, STAFF},
     "view_dashboard": {MD, MANAGER, VIEWER},
     "view_obligations": ALL_ROLES,
     "view_history": {MD, MANAGER, STAFF, VIEWER},

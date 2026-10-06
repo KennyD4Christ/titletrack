@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
 from api.views.auth import CsrfView, LoginView, LogoutView, MeView
+from api.views.dashboard import DashboardViewSet, MyQueueView
 from api.views.imports import ImportBatchViewSet
 from api.views.obligations import ObligationTypeViewSet, ObligationViewSet
 from api.views.reference import (
@@ -18,11 +19,13 @@ router.register("users", UserViewSet, basename="user")
 router.register("obligation-types", ObligationTypeViewSet, basename="obligation-type")
 router.register("obligations", ObligationViewSet, basename="obligation")
 router.register("imports", ImportBatchViewSet, basename="import")
+router.register("dashboard", DashboardViewSet, basename="dashboard")
 
 urlpatterns = [
     path("auth/csrf/", CsrfView.as_view(), name="auth-csrf"),
     path("auth/login/", LoginView.as_view(), name="auth-login"),
     path("auth/logout/", LogoutView.as_view(), name="auth-logout"),
     path("auth/me/", MeView.as_view(), name="auth-me"),
+    path("me/queue/", MyQueueView.as_view(), name="my-queue"),
     path("", include(router.urls)),
 ]

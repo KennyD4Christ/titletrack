@@ -46,4 +46,4 @@ class SaleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Sale
         fields = ["id", "plot", "buyer", "price", "amount_paid", "sale_date",
-                  "fully_paid_on", "status", "is_fully_paid"]
+                  "fully_paid_on", "status", "is_fully_paid", "cancelled_at", "cancel_reason"]

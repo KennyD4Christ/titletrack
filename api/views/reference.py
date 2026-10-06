@@ -1,10 +1,13 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from api.mixins import CompanyScopedMixin
 from api.serializers.reference import (
     BuyerSerializer, DepartmentSerializer, EstateSerializer,
     PlotSerializer, SaleSerializer, UserLiteSerializer,
 )
+from tracker import services
 from tracker.models import Buyer, Department, Estate, Plot, Sale, User
 
 
@@ -42,3 +45,29 @@ class SaleViewSet(ReferenceViewSet):
     queryset = Sale.objects.select_related("plot", "buyer").order_by("-sale_date", "-id")
     serializer_class = SaleSerializer
     filterset_fields = ["status", "plot__estate"]
+    required_actions = {
+        "list": "view_reference", "retrieve": "view_reference",
+        "cancel": "manage_sales", "reinstate": "manage_sales",
+    }
+
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        sale = self.get_object()
+        try:
+            services.cancel_sale(sale, request.user, request.data.get("reason"))
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        except services.SaleStateError as exc:
+            return Response({"detail": str(exc)}, status=409)
+        sale.refresh_from_db()
+        return Response(SaleSerializer(sale).data)
+
+    @action(detail=True, methods=["post"])
+    def reinstate(self, request, pk=None):
+        sale = self.get_object()
+        try:
+            services.reinstate_sale(sale, request.user, request.data.get("note") or "")
+        except services.SaleStateError as exc:
+            return Response({"detail": str(exc)}, status=409)
+        sale.refresh_from_db()
+        return Response(SaleSerializer(sale).data)

@@ -8,7 +8,7 @@ from django_filters import rest_framework as df
 from tracker.computed import STALE_RED_DAYS
 from tracker.models import Obligation
 
-OPEN = Q(status__in=Obligation.OPEN_STATUSES)
+OPEN = Q(status__in=Obligation.OPEN_STATUSES) & Q(sale__status="active")   # active work only
 
 
 class CharInFilter(df.BaseInFilter, df.CharFilter):
@@ -26,6 +26,7 @@ class ObligationFilter(df.FilterSet):
     overdue = df.BooleanFilter(method="filter_overdue")
     stale = df.BooleanFilter(method="filter_stale")
     incomplete = df.BooleanFilter(method="filter_incomplete")
+    due_within = df.NumberFilter(method="filter_due_within")      # ?due_within=7 -> open, due today..7 days from now
     q = df.CharFilter(method="filter_q")
 
     class Meta:
@@ -46,6 +47,11 @@ class ObligationFilter(df.FilterSet):
     def filter_stale(self, qs, name, value):
         cutoff = timezone.now() - timedelta(days=STALE_RED_DAYS)
         return self._apply(qs, OPEN & Q(last_updated_at__lt=cutoff), value)
+
+    def filter_due_within(self, qs, name, value):
+        days = max(0, min(int(value), 365))
+        today = timezone.localdate()
+        return qs.filter(OPEN & Q(due_date__gte=today, due_date__lte=today + timedelta(days=days)))
 
     def filter_incomplete(self, qs, name, value):
         qs = qs.annotate(_next_action_trimmed=Trim("next_action"))

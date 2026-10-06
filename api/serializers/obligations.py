@@ -29,6 +29,8 @@ class ObligationListSerializer(ClockMixin, serializers.ModelSerializer):
     type_name = serializers.CharField(source="obligation_type.name", read_only=True)
     owner_name = serializers.SerializerMethodField()
     department_name = serializers.CharField(source="department.name", read_only=True, allow_null=True)
+    sale_status = serializers.CharField(source="sale.status", read_only=True)
+    is_cancelled = serializers.SerializerMethodField()
     is_open = serializers.SerializerMethodField()
     days_outstanding = serializers.SerializerMethodField()
     days_overdue = serializers.SerializerMethodField()
@@ -42,12 +44,15 @@ class ObligationListSerializer(ClockMixin, serializers.ModelSerializer):
             "obligation_type", "type_name", "status", "stage",
             "owner", "owner_name", "department", "department_name", "external_party",
             "next_action", "next_review_date", "started_on", "due_date", "last_updated_at",
-            "is_open", "days_outstanding", "days_overdue", "staleness", "is_incomplete",
+            "sale_status", "is_cancelled", "is_open", "days_outstanding", "days_overdue", "staleness", "is_incomplete",
         ]
         read_only_fields = fields
 
     def get_owner_name(self, obj):
         return _person_name(obj.owner)
+
+    def get_is_cancelled(self, obj):
+        return computed.is_cancelled(obj)
 
     def get_is_open(self, obj):
         return computed.is_open(obj)
