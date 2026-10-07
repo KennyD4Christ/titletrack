@@ -72,7 +72,8 @@ class Command(BaseCommand):
             username = f"{base}_{suffix}"
             return User.objects.create_user(
                 username, password=password, company=company, role=role,
-                department=departments.get(dept), first_name=base.title(),
+                department=departments.get(dept), first_name=names.DEMO_USERS[base][0],
+                last_name=names.DEMO_USERS[base][1],
             )
 
         make_user("md", "md")
@@ -126,6 +127,8 @@ class Command(BaseCommand):
                 sale_date = paid_on - timedelta(days=rng.randint(30, 400))
                 services.create_sale(company, plot, buyer, price, sale_date, price, paid_on)
 
+        # Explicit order: without ORDER BY, PostgreSQL may return rows in any order, which would make
+        # "same seed, same data" untrue.
         obligations = (Obligation.objects.filter(company=company).select_related("obligation_type", "sale")
                        .order_by("sale_id", "obligation_type_id"))
         for ob in obligations:

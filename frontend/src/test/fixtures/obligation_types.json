@@ -1,0 +1,39 @@
+{
+  "count": 4,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 5,
+      "name": "Allocation Letter",
+      "trigger": "on_sale",
+      "sla_days": 30,
+      "default_department": 4,
+      "is_active": true
+    },
+    {
+      "id": 7,
+      "name": "Deed of Assignment",
+      "trigger": "on_full_payment",
+      "sla_days": 90,
+      "default_department": 6,
+      "is_active": true
+    },
+    {
+      "id": 6,
+      "name": "Survey Plan",
+      "trigger": "on_full_payment",
+      "sla_days": 60,
+      "default_department": 5,
+      "is_active": true
+    },
+    {
+      "id": 8,
+      "name": "Title Registration",
+      "trigger": "on_full_payment",
+      "sla_days": 180,
+      "default_department": 6,
+      "is_active": true
+    }
+  ]
+}

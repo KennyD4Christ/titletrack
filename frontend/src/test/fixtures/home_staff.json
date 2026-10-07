@@ -1,0 +1,11 @@
+{
+  "role": "staff",
+  "as_of": "2026-10-06",
+  "queue": {
+    "overdue": 125,
+    "due_soon": 2,
+    "awaiting_external": 84,
+    "other": 78,
+    "open": 289
+  }
+}

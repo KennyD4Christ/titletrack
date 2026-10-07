@@ -95,6 +95,14 @@ class NumbersMatchTheListsTests(DashboardBase):
         data = self.home()
         self.assertEqual(sum(data["ageing"].values()), data["attention"]["open"])
 
+    def test_each_ageing_bucket_equals_its_list(self):
+        ageing = self.home()["ageing"]
+        self.assertEqual(ageing["d0_30"], self.list_count(age_max="30"))
+        self.assertEqual(ageing["d31_60"], self.list_count(age_min="31", age_max="60"))
+        self.assertEqual(ageing["d61_90"], self.list_count(age_min="61", age_max="90"))
+        self.assertEqual(ageing["d90_plus"], self.list_count(age_min="91"))
+        self.assertGreater(ageing["d90_plus"], 0)
+
     def test_estate_rows_add_up_to_the_exposure_total(self):
         data = self.home()
         total = sum(float(r["amount"]) for r in data["by_estate"])

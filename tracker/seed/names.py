@@ -15,3 +15,10 @@ ESTATES = [
     ("Sunrise Court", "Ibeju-Lekki, Lagos", "SC", (12_000_000, 30_000_000)),
     ("Palm Heights", "Ikorodu, Lagos", "PH", (9_000_000, 22_000_000)),
 ]
+
+# Display names for the demo logins (login names stay e.g. md_demohomes)
+DEMO_USERS = {
+    "md": ("Folake", "Adeyemi"), "manager": ("Emeka", "Okafor"), "docs": ("Aisha", "Bello"),
+    "survey": ("Tunde", "Balogun"), "legal": ("Ngozi", "Eze"), "sales": ("Segun", "Lawal"),
+    "viewer": ("Zainab", "Mohammed"),
+}

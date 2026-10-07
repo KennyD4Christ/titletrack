@@ -1,0 +1,56 @@
+{
+  "count": 7,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 12,
+      "username": "docs_demohomes",
+      "full_name": "Aisha Bello",
+      "role": "staff",
+      "department": 4
+    },
+    {
+      "id": 14,
+      "username": "legal_demohomes",
+      "full_name": "Ngozi Eze",
+      "role": "staff",
+      "department": 6
+    },
+    {
+      "id": 9,
+      "username": "manager_demohomes",
+      "full_name": "Emeka Okafor",
+      "role": "manager",
+      "department": null
+    },
+    {
+      "id": 8,
+      "username": "md_demohomes",
+      "full_name": "Folake Adeyemi",
+      "role": "md",
+      "department": null
+    },
+    {
+      "id": 10,
+      "username": "sales_demohomes",
+      "full_name": "Segun Lawal",
+      "role": "sales",
+      "department": null
+    },
+    {
+      "id": 13,
+      "username": "survey_demohomes",
+      "full_name": "Tunde Balogun",
+      "role": "staff",
+      "department": 5
+    },
+    {
+      "id": 11,
+      "username": "viewer_demohomes",
+      "full_name": "Zainab Mohammed",
+      "role": "viewer",
+      "department": null
+    }
+  ]
+}

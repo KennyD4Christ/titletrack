@@ -1,0 +1,11 @@
+{
+  "id": 11,
+  "username": "viewer_demohomes",
+  "full_name": "Zainab Mohammed",
+  "role": "viewer",
+  "company": {
+    "id": 2,
+    "name": "Demo Homes"
+  },
+  "department": null
+}

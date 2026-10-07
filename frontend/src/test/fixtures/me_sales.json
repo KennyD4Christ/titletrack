@@ -1,0 +1,11 @@
+{
+  "id": 10,
+  "username": "sales_demohomes",
+  "full_name": "Segun Lawal",
+  "role": "sales",
+  "company": {
+    "id": 2,
+    "name": "Demo Homes"
+  },
+  "department": null
+}

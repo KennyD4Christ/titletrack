@@ -1,0 +1,27 @@
+{
+  "count": 4,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 5,
+      "name": "Green Valley Estate",
+      "location": "Lekki, Lagos"
+    },
+    {
+      "id": 8,
+      "name": "Palm Heights",
+      "location": "Ikorodu, Lagos"
+    },
+    {
+      "id": 6,
+      "name": "Royal Gardens",
+      "location": "Epe, Lagos"
+    },
+    {
+      "id": 7,
+      "name": "Sunrise Court",
+      "location": "Ibeju-Lekki, Lagos"
+    }
+  ]
+}

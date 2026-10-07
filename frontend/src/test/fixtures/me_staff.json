@@ -1,0 +1,14 @@
+{
+  "id": 14,
+  "username": "legal_demohomes",
+  "full_name": "Ngozi Eze",
+  "role": "staff",
+  "company": {
+    "id": 2,
+    "name": "Demo Homes"
+  },
+  "department": {
+    "id": 6,
+    "name": "Legal"
+  }
+}

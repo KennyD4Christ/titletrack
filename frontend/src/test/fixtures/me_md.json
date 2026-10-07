@@ -1,0 +1,11 @@
+{
+  "id": 8,
+  "username": "md_demohomes",
+  "full_name": "Folake Adeyemi",
+  "role": "md",
+  "company": {
+    "id": 2,
+    "name": "Demo Homes"
+  },
+  "department": null
+}

@@ -1,0 +1,85 @@
+[
+  {
+    "id": 2494,
+    "created_at": "2024-05-15T09:00:00+01:00",
+    "actor": null,
+    "actor_name": null,
+    "note": "Created automatically",
+    "changes": {},
+    "changes_display": []
+  },
+  {
+    "id": 3488,
+    "created_at": "2026-09-16T15:00:00+01:00",
+    "actor": 12,
+    "actor_name": "Aisha Bello",
+    "note": "Submitted externally",
+    "changes": {
+      "owner": [
+        null,
+        12
+      ],
+      "status": [
+        "not_started",
+        "awaiting_external"
+      ],
+      "stage": [
+        "",
+        "With Estate Admin Office"
+      ],
+      "external_party": [
+        "",
+        "Estate Admin Office"
+      ],
+      "reason": [
+        "",
+        "Awaiting solicitor's confirmation"
+      ],
+      "next_action": [
+        "",
+        "Chase feedback"
+      ],
+      "next_review_date": [
+        null,
+        "2026-09-29"
+      ]
+    },
+    "changes_display": [
+      {
+        "field": "owner",
+        "from": null,
+        "to": "Aisha Bello"
+      },
+      {
+        "field": "status",
+        "from": "not_started",
+        "to": "awaiting_external"
+      },
+      {
+        "field": "stage",
+        "from": "",
+        "to": "With Estate Admin Office"
+      },
+      {
+        "field": "external_party",
+        "from": "",
+        "to": "Estate Admin Office"
+      },
+      {
+        "field": "reason",
+        "from": "",
+        "to": "Awaiting solicitor's confirmation"
+      },
+      {
+        "field": "next_action",
+        "from": "",
+        "to": "Chase feedback"
+      },
+      {
+        "field": "next_review_date",
+        "from": null,
+        "to": "2026-09-29"
+      }
+    ]
+  }
+]

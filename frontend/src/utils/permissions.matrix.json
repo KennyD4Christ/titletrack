@@ -1,0 +1,91 @@
+{
+  "actions": {
+    "bulk_update": [
+      "manager",
+      "md"
+    ],
+    "buyer_message": [
+      "manager",
+      "md",
+      "sales",
+      "staff"
+    ],
+    "download_attachment": [
+      "manager",
+      "md",
+      "staff",
+      "viewer"
+    ],
+    "edit_obligation": [
+      "manager",
+      "md",
+      "staff"
+    ],
+    "export": [
+      "manager",
+      "md",
+      "viewer"
+    ],
+    "import_data": [
+      "manager",
+      "md"
+    ],
+    "manage_sales": [
+      "manager",
+      "md"
+    ],
+    "manage_settings": [
+      "manager",
+      "md"
+    ],
+    "upload_attachment": [
+      "manager",
+      "md",
+      "staff"
+    ],
+    "view_dashboard": [
+      "manager",
+      "md",
+      "viewer"
+    ],
+    "view_history": [
+      "manager",
+      "md",
+      "staff",
+      "viewer"
+    ],
+    "view_home": [
+      "manager",
+      "md",
+      "sales",
+      "staff",
+      "viewer"
+    ],
+    "view_my_queue": [
+      "manager",
+      "md",
+      "staff"
+    ],
+    "view_obligations": [
+      "manager",
+      "md",
+      "sales",
+      "staff",
+      "viewer"
+    ],
+    "view_reference": [
+      "manager",
+      "md",
+      "sales",
+      "staff",
+      "viewer"
+    ]
+  },
+  "roles": [
+    "manager",
+    "md",
+    "sales",
+    "staff",
+    "viewer"
+  ]
+}

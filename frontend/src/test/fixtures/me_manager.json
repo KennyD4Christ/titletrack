@@ -1,0 +1,11 @@
+{
+  "id": 9,
+  "username": "manager_demohomes",
+  "full_name": "Emeka Okafor",
+  "role": "manager",
+  "company": {
+    "id": 2,
+    "name": "Demo Homes"
+  },
+  "department": null
+}

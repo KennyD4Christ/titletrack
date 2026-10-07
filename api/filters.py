@@ -26,6 +26,8 @@ class ObligationFilter(df.FilterSet):
     overdue = df.BooleanFilter(method="filter_overdue")
     stale = df.BooleanFilter(method="filter_stale")
     incomplete = df.BooleanFilter(method="filter_incomplete")
+    age_min = df.NumberFilter(method="filter_age_min")           # ?age_min=31 -> open, outstanding at least 31 days
+    age_max = df.NumberFilter(method="filter_age_max")           # ?age_max=60 -> open, outstanding at most 60 days
     due_within = df.NumberFilter(method="filter_due_within")      # ?due_within=7 -> open, due today..7 days from now
     q = df.CharFilter(method="filter_q")
 
@@ -47,6 +49,14 @@ class ObligationFilter(df.FilterSet):
     def filter_stale(self, qs, name, value):
         cutoff = timezone.now() - timedelta(days=STALE_RED_DAYS)
         return self._apply(qs, OPEN & Q(last_updated_at__lt=cutoff), value)
+
+    def filter_age_min(self, qs, name, value):
+        cutoff = timezone.localdate() - timedelta(days=max(0, int(value)))
+        return qs.filter(OPEN & Q(started_on__lte=cutoff))
+
+    def filter_age_max(self, qs, name, value):
+        cutoff = timezone.localdate() - timedelta(days=max(0, int(value)))
+        return qs.filter(OPEN & Q(started_on__gte=cutoff))
 
     def filter_due_within(self, qs, name, value):
         days = max(0, min(int(value), 365))
