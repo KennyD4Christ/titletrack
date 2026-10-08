@@ -7,7 +7,7 @@ from api.filters import ObligationFilter
 from api.mixins import CompanyScopedMixin
 from api.permissions import ActionPermission, CanEditObligation
 from api.serializers.obligations import (
-    ObligationDetailSerializer, ObligationEventSerializer, ObligationListSerializer,
+    BulkUpdateSerializer, ObligationDetailSerializer, ObligationEventSerializer, ObligationListSerializer,
     ObligationTypeSerializer, ObligationUpdateSerializer,
 )
 from tracker import services
@@ -37,9 +37,9 @@ class ObligationViewSet(CompanyScopedMixin, mixins.ListModelMixin, mixins.Retrie
     permission_classes = [ActionPermission, CanEditObligation]
     required_actions = {
         "list": "view_obligations", "retrieve": "view_obligations",
-        "partial_update": "edit_obligation", "events": "view_history",
+        "partial_update": "edit_obligation", "events": "view_history", "bulk_update": "bulk_update",
     }
-    http_method_names = ["get", "patch", "head", "options"]
+    http_method_names = ["get", "post", "patch", "head", "options"]   # POST only for the bulk-update action
     filterset_class = ObligationFilter
     ordering_fields = ["due_date", "started_on", "last_updated_at", "status"]
 
@@ -65,6 +65,23 @@ class ObligationViewSet(CompanyScopedMixin, mixins.ListModelMixin, mixins.Retrie
             return Response({"detail": str(exc)}, status=409)
         fresh = self.get_queryset().get(pk=obligation.pk)
         return Response(ObligationDetailSerializer(fresh, context=self.get_serializer_context()).data)
+
+    @action(detail=False, methods=["post"], url_path="bulk-update", url_name="bulk-update")
+    def bulk_update(self, request):
+        serializer = BulkUpdateSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        ids, note = data.pop("ids"), data.pop("note", "")
+        try:
+            updated = services.bulk_update_obligations(ids, request.user, note=note, **data)
+        except services.BulkUpdateError as exc:
+            return Response({"detail": "Some of the selected obligations cannot be changed, so nothing was changed.",
+                             "problems": exc.problems}, status=409)
+        except services.SaleStateError as exc:
+            return Response({"detail": str(exc)}, status=409)
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        return Response({"updated": len(updated), "ids": [o.pk for o in updated]})
 
     @action(detail=True, methods=["get"])
     def events(self, request, pk=None):

@@ -1,7 +1,14 @@
+import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { listObligations } from "../api/obligations.js";
 import { useReferenceData } from "../hooks/useReferenceData.js";
+import { useRefreshAfterSave } from "../hooks/useRefreshAfterSave.js";
+import { useAuth } from "../context/AuthContext.jsx";
+import { can } from "../utils/permissions.js";
+import { plural } from "../utils/format.js";
+import QuickUpdateModal from "../components/obligations/QuickUpdateModal.jsx";
+import BulkUpdateModal from "../components/obligations/BulkUpdateModal.jsx";
 import PageHeader from "../components/layout/PageHeader.jsx";
 import ObligationFilters from "../components/obligations/ObligationFilters.jsx";
 import ObligationTable from "../components/obligations/ObligationTable.jsx";
@@ -35,6 +42,14 @@ export default function ObligationsPage() {
   const filters = Object.fromEntries([...params].filter(([k]) => FILTER_KEYS.includes(k)));
   const page = Math.max(1, Number(filters.page) || 1);
   const reference = useReferenceData();
+  const { user } = useAuth();
+  const refresh = useRefreshAfterSave();
+  const canBulk = can(user, "bulk_update");
+  const [selected, setSelected] = useState(() => new Set());
+  const [editing, setEditing] = useState(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => setSelected(new Set()), [params.toString()]);   // a different list means a new selection
 
   const query = useQuery({
     queryKey: ["obligations", filters],
@@ -61,7 +76,15 @@ export default function ObligationsPage() {
   else {
     body = (
       <>
-        <ObligationTable rows={query.data.results} />
+        <ObligationTable
+          rows={query.data.results}
+          onUpdate={setEditing}
+          selection={canBulk ? {
+            selected,
+            onToggle: (id) => setSelected((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; }),
+            onToggleAll: (ids, on) => setSelected(on ? new Set(ids) : new Set()),
+          } : undefined}
+        />
         <Pagination page={page} pageSize={PAGE_SIZE} count={query.data.count} onPage={(p) => update({ page: p }, { keepPage: true })} />
       </>
     );
@@ -87,7 +110,32 @@ export default function ObligationsPage() {
           ))}
         </ul>
       ) : null}
+      {message ? <p className="banner banner-ok" role="status">{message}</p> : null}
+      {selected.size > 0 ? (
+        <div className="bulk-bar" role="region" aria-label="Selected obligations">
+          <strong>{selected.size} selected</strong>
+          <button type="button" className="btn btn-primary" onClick={() => setBulkOpen(true)}>Update selected</button>
+          <button type="button" className="btn" onClick={() => setSelected(new Set())}>Clear selection</button>
+        </div>
+      ) : null}
       <section className="card">{body}</section>
+      {editing ? (
+        <QuickUpdateModal
+          obligation={editing}
+          users={reference.users}
+          onClose={() => setEditing(null)}
+          onSaved={async () => { setEditing(null); setMessage("Saved."); await refresh(); }}
+        />
+      ) : null}
+      {bulkOpen ? (
+        <BulkUpdateModal
+          ids={[...selected]}
+          users={reference.users}
+          labelFor={(id) => { const r = query.data?.results.find((x) => x.id === id); return r ? `${r.buyer_name}, ${r.type_name}` : `#${id}`; }}
+          onClose={() => setBulkOpen(false)}
+          onDone={async (result) => { setBulkOpen(false); setSelected(new Set()); setMessage(`Updated ${plural(result.updated, "obligation")}.`); await refresh(); }}
+        />
+      ) : null}
     </>
   );
 }

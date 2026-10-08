@@ -6,3 +6,6 @@ db.sqlite3
 media/
 staticfiles/
 .vscode/
+
+# Temporary local backup before frontend update
+frontend_backup_before_update/

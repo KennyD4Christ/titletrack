@@ -6,3 +6,6 @@ export const getObligationEvents = (id) => api.get(`/api/obligations/${id}/event
 export const listEstates = async () => (await api.get("/api/estates/", { page_size: 200 })).results;
 export const listObligationTypes = async () => (await api.get("/api/obligation-types/", { page_size: 200 })).results;
 export const listUsers = async () => (await api.get("/api/users/", { page_size: 200 })).results;
+
+export const updateObligation = (id, payload) => api.patch(`/api/obligations/${id}/`, payload);
+export const bulkUpdateObligations = (payload) => api.post("/api/obligations/bulk-update/", payload);

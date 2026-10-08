@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { getObligation, getObligationEvents } from "../api/obligations.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { can } from "../utils/permissions.js";
 import PageHeader from "../components/layout/PageHeader.jsx";
+import ObligationForm from "../components/obligations/ObligationForm.jsx";
+import { useReferenceData } from "../hooks/useReferenceData.js";
+import { useRefreshAfterSave } from "../hooks/useRefreshAfterSave.js";
 import LoadingState from "../components/common/LoadingState.jsx";
 import ErrorState from "../components/common/ErrorState.jsx";
 import StatusBadge from "../components/common/StatusBadge.jsx";
@@ -72,6 +76,9 @@ export default function ObligationDetailPage() {
   const { user } = useAuth();
   const detail = useQuery({ queryKey: ["obligation", id], queryFn: () => getObligation(id) });
   const showHistory = can(user, "view_history");
+  const reference = useReferenceData();
+  const refresh = useRefreshAfterSave();
+  const [saved, setSaved] = useState(false);
   const events = useQuery({ queryKey: ["obligation", id, "events"], queryFn: () => getObligationEvents(id), enabled: showHistory });
 
   if (detail.isPending) return <LoadingState />;
@@ -93,6 +100,20 @@ export default function ObligationDetailPage() {
         </div>
       ) : null}
       <WhyOverdue ob={ob} />
+      {ob.can_edit ? (
+        <section className="card" aria-labelledby="edit-title">
+          <h2 id="edit-title">Update this item</h2>
+          {saved ? <p className="banner banner-ok" role="status">Saved. The history below shows the change.</p> : null}
+          <ObligationForm
+            key={ob.last_updated_at}
+            obligation={ob}
+            users={reference.users}
+            onSaved={async () => { setSaved(true); await refresh(); }}
+          />
+        </section>
+      ) : !ob.is_cancelled ? (
+        <p className="muted small">You can view this item but not change it.</p>
+      ) : null}
       <section className="card" aria-labelledby="sale-title">
         <h2 id="sale-title">The sale</h2>
         <dl className="facts">
@@ -105,7 +126,6 @@ export default function ObligationDetailPage() {
         </dl>
       </section>
       {showHistory ? (events.isPending ? <LoadingState label="Loading history…" /> : events.isError ? <ErrorState error={events.error} /> : <History events={events.data} />) : null}
-      <p className="muted small">Editing from this screen arrives next; for now this page shows the full picture.</p>
     </div>
   );
 }

@@ -31,10 +31,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 597,
-      "days_overdue": 507,
+      "days_outstanding": 598,
+      "days_overdue": 508,
       "staleness": "green",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     },
     {
       "id": 1832,
@@ -60,10 +61,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 590,
-      "days_overdue": 500,
+      "days_outstanding": 591,
+      "days_overdue": 501,
       "staleness": "red",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     },
     {
       "id": 1358,
@@ -89,10 +91,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 584,
-      "days_overdue": 494,
+      "days_outstanding": 585,
+      "days_overdue": 495,
       "staleness": "amber",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     }
   ],
   "due_soon": [
@@ -120,10 +123,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 86,
+      "days_outstanding": 87,
       "days_overdue": 0,
       "staleness": "green",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     },
     {
       "id": 1476,
@@ -149,10 +153,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 175,
+      "days_outstanding": 176,
       "days_overdue": 0,
       "staleness": "amber",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     }
   ],
   "awaiting_external": [
@@ -180,10 +185,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 81,
+      "days_outstanding": 82,
       "days_overdue": 0,
       "staleness": "red",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     },
     {
       "id": 1509,
@@ -209,10 +215,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 168,
+      "days_outstanding": 169,
       "days_overdue": 0,
       "staleness": "red",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     },
     {
       "id": 1866,
@@ -238,10 +245,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 162,
+      "days_outstanding": 163,
       "days_overdue": 0,
       "staleness": "red",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     }
   ],
   "other": [
@@ -269,10 +277,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 171,
+      "days_outstanding": 172,
       "days_overdue": 0,
       "staleness": "red",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     },
     {
       "id": 1787,
@@ -298,10 +307,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 171,
+      "days_outstanding": 172,
       "days_overdue": 0,
       "staleness": "amber",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     },
     {
       "id": 2007,
@@ -327,10 +337,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 171,
+      "days_outstanding": 172,
       "days_overdue": 0,
       "staleness": "amber",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     }
   ]
 }

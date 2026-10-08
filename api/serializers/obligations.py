@@ -2,7 +2,9 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from api.serializers.reference import BuyerSerializer, SaleSerializer
+from api.permissions import can_edit_obligation
 from tracker import computed
+from tracker.services import BULK_LIMIT
 from tracker.models import Department, Obligation, ObligationEvent, ObligationType, User
 
 
@@ -36,6 +38,7 @@ class ObligationListSerializer(ClockMixin, serializers.ModelSerializer):
     days_overdue = serializers.SerializerMethodField()
     staleness = serializers.SerializerMethodField()
     is_incomplete = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
 
     class Meta:
         model = Obligation
@@ -45,6 +48,7 @@ class ObligationListSerializer(ClockMixin, serializers.ModelSerializer):
             "owner", "owner_name", "department", "department_name", "external_party",
             "next_action", "next_review_date", "started_on", "due_date", "last_updated_at",
             "sale_status", "is_cancelled", "is_open", "days_outstanding", "days_overdue", "staleness", "is_incomplete",
+            "can_edit",
         ]
         read_only_fields = fields
 
@@ -68,6 +72,11 @@ class ObligationListSerializer(ClockMixin, serializers.ModelSerializer):
 
     def get_is_incomplete(self, obj):
         return computed.is_incomplete(obj)
+
+    def get_can_edit(self, obj):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        return bool(user and user.is_authenticated and can_edit_obligation(user, obj))
 
 
 class ObligationDetailSerializer(ObligationListSerializer):
@@ -117,6 +126,16 @@ class ObligationUpdateSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         if not attrs:
+            raise serializers.ValidationError("Nothing to update.")
+        return attrs
+
+
+class BulkUpdateSerializer(ObligationUpdateSerializer):
+    """The same editable fields as a single update, plus the list of obligations to change."""
+    ids = serializers.ListField(child=serializers.IntegerField(min_value=1), allow_empty=False, max_length=BULK_LIMIT)
+
+    def validate(self, attrs):
+        if not {key for key in attrs if key != "ids"}:
             raise serializers.ValidationError("Nothing to update.")
         return attrs
 

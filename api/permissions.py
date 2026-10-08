@@ -70,16 +70,31 @@ class ActionPermission(BasePermission):
         return can(request.user, action)
 
 
+def _may_edit(user, obligation):
+    """Role and ownership rule. MD and Manager may edit any obligation; Staff only their own or their department's."""
+    if user.role in (MD, MANAGER):
+        return True
+    if user.role == STAFF:
+        return obligation.owner_id == user.id or (
+            user.department_id is not None and obligation.department_id == user.department_id)
+    return False
+
+
+def can_edit_obligation(user, obligation):
+    """What the screen uses to show or hide edit controls: allowed role, same company, ownership rule,
+    and the sale must still be active."""
+    return (
+        can(user, "edit_obligation")
+        and obligation.company_id == user.company_id
+        and obligation.sale.status == "active"
+        and _may_edit(user, obligation)
+    )
+
+
 class CanEditObligation(BasePermission):
-    """Object-level rule on top of the role matrix.
-    MD and Manager may edit any obligation; Staff only their own, or their department's."""
+    """Object-level rule on top of the role matrix (a cancelled sale is answered with 409 by the service)."""
 
     def has_object_permission(self, request, view, obj):
         if request.method in SAFE_METHODS:
             return True
-        user = request.user
-        if user.role in (MD, MANAGER):
-            return True
-        if user.role == STAFF:
-            return obj.owner_id == user.id or (user.department_id is not None and obj.department_id == user.department_id)
-        return False
+        return _may_edit(request.user, obj)

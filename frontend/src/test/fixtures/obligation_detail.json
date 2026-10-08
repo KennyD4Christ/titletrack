@@ -22,10 +22,11 @@
   "sale_status": "active",
   "is_cancelled": false,
   "is_open": true,
-  "days_outstanding": 874,
-  "days_overdue": 844,
+  "days_outstanding": 875,
+  "days_overdue": 845,
   "staleness": "red",
   "is_incomplete": false,
+  "can_edit": true,
   "reason": "Awaiting solicitor's confirmation",
   "completed_on": null,
   "created_at": "2026-10-06T21:03:15.330275+01:00",
@@ -51,7 +52,7 @@
   "timeline": {
     "sla_days": 30,
     "expected_days": 30,
-    "actual_days": 874,
-    "delay_days": 844
+    "actual_days": 875,
+    "delay_days": 845
   }
 }

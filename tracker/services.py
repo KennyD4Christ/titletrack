@@ -226,3 +226,40 @@ def reinstate_sale(sale, actor, note=""):
         for ob in sale.obligations.all()
     ])
     return sale
+
+
+# ---------- bulk update ----------
+
+BULK_LIMIT = 200
+
+
+class BulkUpdateError(Exception):
+    """Some selected obligations cannot be changed. Nothing was changed. `problems` lists each one."""
+
+    def __init__(self, problems):
+        self.problems = problems
+        super().__init__(f"{len(problems)} obligation(s) cannot be changed.")
+
+
+def bulk_update_obligations(ids, actor, note="", **changes):
+    """Apply the same change to many obligations, ALL OR NOTHING. Each one still goes through
+    update_obligation, so each gets its own history entry (who, when, before/after, note)."""
+    ids = list(dict.fromkeys(int(i) for i in ids))
+    if not ids:
+        raise ValueError("Select at least one obligation.")
+    if len(ids) > BULK_LIMIT:
+        raise ValueError(f"You can change at most {BULK_LIMIT} obligations at once.")
+    if not changes and not (note or "").strip():
+        raise ValueError("Nothing to change.")
+    with transaction.atomic():
+        found = {o.pk: o for o in Obligation.objects.filter(pk__in=ids, company_id=actor.company_id).select_related("sale")}
+        problems = []
+        for pk in ids:
+            ob = found.get(pk)
+            if ob is None:
+                problems.append({"id": pk, "error": "Not found."})
+            elif ob.sale.status != Sale.Status.ACTIVE:
+                problems.append({"id": pk, "error": "The sale is cancelled."})
+        if problems:
+            raise BulkUpdateError(problems)
+        return [update_obligation(found[pk], actor, note=note, **changes) for pk in ids]

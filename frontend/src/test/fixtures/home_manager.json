@@ -1,11 +1,11 @@
 {
   "role": "manager",
-  "as_of": "2026-10-06",
+  "as_of": "2026-10-07",
   "attention": {
     "open": 603,
     "overdue": 319,
-    "due_soon": 5,
-    "stale": 277,
+    "due_soon": 7,
+    "stale": 297,
     "awaiting_external": 218,
     "incomplete": 171
   },
@@ -15,12 +15,12 @@
     "sales": 264,
     "fully_paid_amount": "5463000000.00",
     "fully_paid_buyers": 257,
-    "average_wait_days": 188.2
+    "average_wait_days": 189.2
   },
   "ageing": {
-    "d0_30": 129,
-    "d31_60": 73,
-    "d61_90": 38,
+    "d0_30": 126,
+    "d31_60": 75,
+    "d61_90": 39,
     "d90_plus": 363
   },
   "by_estate": [
@@ -32,7 +32,7 @@
       "sales": 68,
       "open_obligations": 163,
       "overdue": 78,
-      "oldest_days": 754
+      "oldest_days": 755
     },
     {
       "estate_id": 7,
@@ -42,7 +42,7 @@
       "sales": 62,
       "open_obligations": 136,
       "overdue": 78,
-      "oldest_days": 702
+      "oldest_days": 703
     },
     {
       "estate_id": 8,
@@ -52,7 +52,7 @@
       "sales": 64,
       "open_obligations": 149,
       "overdue": 83,
-      "oldest_days": 874
+      "oldest_days": 875
     },
     {
       "estate_id": 6,
@@ -62,7 +62,7 @@
       "sales": 70,
       "open_obligations": 155,
       "overdue": 80,
-      "oldest_days": 857
+      "oldest_days": 858
     }
   ],
   "by_type": [
@@ -73,7 +73,7 @@
       "overdue": 82,
       "buyers": 230,
       "amount": "4891250000.00",
-      "oldest_days": 599
+      "oldest_days": 600
     },
     {
       "type_id": 7,
@@ -82,7 +82,7 @@
       "overdue": 100,
       "buyers": 183,
       "amount": "3963000000.00",
-      "oldest_days": 597
+      "oldest_days": 598
     },
     {
       "type_id": 6,
@@ -91,7 +91,7 @@
       "overdue": 79,
       "buyers": 132,
       "amount": "2838500000.00",
-      "oldest_days": 591
+      "oldest_days": 592
     },
     {
       "type_id": 5,
@@ -100,7 +100,7 @@
       "overdue": 58,
       "buyers": 58,
       "amount": "1123700000.00",
-      "oldest_days": 874
+      "oldest_days": 875
     }
   ],
   "delay_reasons": [
@@ -162,10 +162,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 874,
-      "days_overdue": 844,
+      "days_outstanding": 875,
+      "days_overdue": 845,
       "staleness": "red",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     },
     {
       "id": 1401,
@@ -191,10 +192,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 857,
-      "days_overdue": 827,
+      "days_outstanding": 858,
+      "days_overdue": 828,
       "staleness": "red",
-      "is_incomplete": true
+      "is_incomplete": true,
+      "can_edit": true
     },
     {
       "id": 1679,
@@ -220,10 +222,11 @@
       "sale_status": "active",
       "is_cancelled": false,
       "is_open": true,
-      "days_outstanding": 852,
-      "days_overdue": 822,
+      "days_outstanding": 853,
+      "days_overdue": 823,
       "staleness": "green",
-      "is_incomplete": false
+      "is_incomplete": false,
+      "can_edit": true
     }
   ],
   "workload": {
@@ -232,7 +235,7 @@
         "department": "Legal",
         "open": 413,
         "overdue": 182,
-        "stale": 199,
+        "stale": 215,
         "awaiting_external": 145,
         "unowned": 124
       },
@@ -240,7 +243,7 @@
         "department": "Survey",
         "open": 132,
         "overdue": 79,
-        "stale": 53,
+        "stale": 57,
         "awaiting_external": 49,
         "unowned": 36
       },
@@ -257,7 +260,7 @@
       {
         "open": 289,
         "overdue": 125,
-        "stale": 85,
+        "stale": 99,
         "awaiting_external": 145,
         "departments": [
           "Legal"
@@ -268,7 +271,7 @@
       {
         "open": 96,
         "overdue": 58,
-        "stale": 25,
+        "stale": 27,
         "awaiting_external": 49,
         "departments": [
           "Survey"
