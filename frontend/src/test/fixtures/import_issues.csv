@@ -1,0 +1,4 @@
+row,level,column,value,message
+7,error,Price,TBC,Invalid price: not a valid amount: 'TBC'.
+8,warning,Date Fully Paid,,"Date fully paid is unknown; using the sale date, so documents may look older than they are."
+8,error,Plot No,A-03,Duplicate of row 6: same estate and plot.

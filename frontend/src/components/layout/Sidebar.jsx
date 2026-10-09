@@ -6,6 +6,7 @@ const ITEMS = [
   { to: "/", label: "Home", action: "view_home", end: true },
   { to: "/queue", label: "My Queue", action: "view_my_queue" },
   { to: "/obligations", label: "Obligations", action: "view_obligations" },
+  { to: "/import", label: "Import", action: "import_data" },
 ];
 
 export default function Sidebar() {

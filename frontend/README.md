@@ -4,7 +4,7 @@ React (Vite) app for the TitleTrack API. Needs **Node 18 or newer** (Node 20 LTS
 
 ```bash
 npm install          # once
-npm test             # 71 tests, no server needed
+npm test             # 91 tests, no server needed
 npm run build        # production build into dist/
 npm run dev          # http://localhost:5173  (needs the Django server on port 8000)
 ```
