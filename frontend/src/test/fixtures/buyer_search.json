@@ -1,0 +1,6 @@
+{
+  "results": [
+    { "id": 701, "full_name": "Bayo Lawal", "phone": "0803 555 0101", "email": "bayo@example.com", "sales_count": 2 },
+    { "id": 702, "full_name": "Bayo Adeleke", "phone": "", "email": "", "sales_count": 1 }
+  ]
+}

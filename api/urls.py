@@ -8,12 +8,14 @@ from api.views.obligations import ObligationTypeViewSet, ObligationViewSet
 from api.views.reference import (
     BuyerViewSet, DepartmentViewSet, EstateViewSet, PlotViewSet, SaleViewSet, UserViewSet,
 )
+from api.views.sales_desk import SalesDeskViewSet
 
 router = SimpleRouter()
 router.register("estates", EstateViewSet, basename="estate")
 router.register("plots", PlotViewSet, basename="plot")
 router.register("buyers", BuyerViewSet, basename="buyer")
 router.register("sales", SaleViewSet, basename="sale")
+router.register("sales-desk", SalesDeskViewSet, basename="sales-desk")
 router.register("departments", DepartmentViewSet, basename="department")
 router.register("users", UserViewSet, basename="user")
 router.register("obligation-types", ObligationTypeViewSet, basename="obligation-type")

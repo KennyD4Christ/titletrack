@@ -1,0 +1,147 @@
+{
+  "id": 612,
+  "buyer": 701,
+  "buyer_name": "Bayo Lawal",
+  "buyer_phone": "0803 555 0101",
+  "plot": 880,
+  "plot_number": "A-2",
+  "estate": 5,
+  "estate_name": "Green Valley Estate",
+  "price": "1000000.00",
+  "amount_paid": "400000.00",
+  "balance_due": "600000.00",
+  "is_fully_paid": false,
+  "sale_date": "2026-08-01",
+  "fully_paid_on": null,
+  "status": "active",
+  "cancelled_at": null,
+  "cancel_reason": "",
+  "obligations_total": 1,
+  "obligations_open": 1,
+  "buyer_detail": {
+    "id": 701,
+    "full_name": "Bayo Lawal",
+    "phone": "0803 555 0101",
+    "email": "bayo@example.com"
+  },
+  "obligations": [
+    {
+      "id": 1901,
+      "type_name": "Allocation Letter",
+      "status": "not_started",
+      "owner_name": null,
+      "started_on": "2026-08-01",
+      "due_date": "2026-08-31",
+      "completed_on": null,
+      "is_open": true
+    }
+  ],
+  "payments": [
+    {
+      "id": 9001,
+      "kind": "opening",
+      "amount": "300000.00",
+      "paid_on": "2026-08-01",
+      "reference": "",
+      "note": "Opening balance",
+      "recorded_by_name": "Emeka Okafor",
+      "created_at": "2026-08-01T09:00:00+01:00",
+      "reverses": null,
+      "is_reversed": false,
+      "reversible": true
+    },
+    {
+      "id": 9002,
+      "kind": "payment",
+      "amount": "100000.00",
+      "paid_on": "2026-09-01",
+      "reference": "TRF-0042",
+      "note": "",
+      "recorded_by_name": "Emeka Okafor",
+      "created_at": "2026-09-01T10:00:00+01:00",
+      "reverses": null,
+      "is_reversed": false,
+      "reversible": true
+    },
+    {
+      "id": 9003,
+      "kind": "payment",
+      "amount": "50000.00",
+      "paid_on": "2026-09-10",
+      "reference": "",
+      "note": "",
+      "recorded_by_name": "Emeka Okafor",
+      "created_at": "2026-09-10T11:00:00+01:00",
+      "reverses": null,
+      "is_reversed": true,
+      "reversible": false
+    },
+    {
+      "id": 9004,
+      "kind": "reversal",
+      "amount": "-50000.00",
+      "paid_on": "2026-09-12",
+      "reference": "Reversal of payment #9003",
+      "note": "Cheque bounced",
+      "recorded_by_name": "Emeka Okafor",
+      "created_at": "2026-09-12T12:00:00+01:00",
+      "reverses": 9003,
+      "is_reversed": false,
+      "reversible": false
+    }
+  ],
+  "history": [
+    {
+      "id": 5001,
+      "action": "created",
+      "action_label": "Sale created",
+      "actor_name": "Emeka Okafor",
+      "created_at": "2026-08-01T09:00:00+01:00",
+      "note": "",
+      "changes_display": [
+        { "field": "price", "from": null, "to": "1000000.00" },
+        { "field": "amount_paid", "from": null, "to": "300000.00" }
+      ]
+    },
+    {
+      "id": 5002,
+      "action": "payment",
+      "action_label": "Payment recorded",
+      "actor_name": "Emeka Okafor",
+      "created_at": "2026-09-01T10:00:00+01:00",
+      "note": "Payment #9002 (TRF-0042)",
+      "changes_display": [
+        { "field": "amount_paid", "from": "300000.00", "to": "400000.00" }
+      ]
+    },
+    {
+      "id": 5003,
+      "action": "payment",
+      "action_label": "Payment recorded",
+      "actor_name": "Emeka Okafor",
+      "created_at": "2026-09-10T11:00:00+01:00",
+      "note": "Payment #9003",
+      "changes_display": [
+        { "field": "amount_paid", "from": "400000.00", "to": "450000.00" }
+      ]
+    },
+    {
+      "id": 5004,
+      "action": "payment_reversed",
+      "action_label": "Payment reversed",
+      "actor_name": "Emeka Okafor",
+      "created_at": "2026-09-12T12:00:00+01:00",
+      "note": "Cheque bounced",
+      "changes_display": [
+        { "field": "amount_paid", "from": "450000.00", "to": "400000.00" }
+      ]
+    }
+  ],
+  "can": {
+    "record_payment": true,
+    "reverse_payment": true,
+    "edit_buyer": true,
+    "cancel": true,
+    "reinstate": false
+  }
+}

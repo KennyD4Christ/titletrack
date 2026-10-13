@@ -6,6 +6,7 @@ const ITEMS = [
   { to: "/", label: "Home", action: "view_home", end: true },
   { to: "/queue", label: "My Queue", action: "view_my_queue" },
   { to: "/obligations", label: "Obligations", action: "view_obligations" },
+  { to: "/sales", label: "Sales", action: "view_sales" },
   { to: "/import", label: "Import", action: "import_data" },
 ];
 

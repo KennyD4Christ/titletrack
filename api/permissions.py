@@ -24,6 +24,12 @@ MATRIX = {
     "import_data": {MD, MANAGER},
     "manage_settings": {MD, MANAGER},
     "manage_sales": {MD, MANAGER},
+    # Sales desk: separate actions on purpose, so a Finance role can be added later by editing one line each.
+    "view_sales": {MD, MANAGER},
+    "add_sale": {MD, MANAGER},
+    "record_payment": {MD, MANAGER},
+    "reverse_payment": {MD, MANAGER},
+    "edit_buyer": {MD, MANAGER},
     "upload_attachment": {MD, MANAGER, STAFF},
     "download_attachment": {MD, MANAGER, STAFF, VIEWER},
     "buyer_message": {MD, MANAGER, STAFF, SALES},

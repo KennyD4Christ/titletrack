@@ -3,7 +3,7 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from .models import (
     Buyer, Company, Department, Estate, Obligation, ObligationEvent,
-    ObligationType, Plot, Sale, User,
+    ObligationType, Payment, Plot, Sale, SaleEvent, User,
 )
 
 
@@ -77,6 +77,18 @@ class ObligationTypeAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
 class SaleAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAdmin):
     list_display = ["plot", "buyer", "price", "amount_paid", "status", "company"]
     list_filter = ["status"]
+
+
+@admin.register(Payment)
+class PaymentAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAdmin):
+    list_display = ["sale", "kind", "amount", "paid_on", "recorded_by", "created_at"]
+    list_filter = ["kind"]
+
+
+@admin.register(SaleEvent)
+class SaleEventAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAdmin):
+    list_display = ["sale", "action", "actor", "created_at"]
+    list_filter = ["action"]
 
 
 @admin.register(Obligation)

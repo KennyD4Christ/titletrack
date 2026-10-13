@@ -1,5 +1,9 @@
 {
   "actions": {
+    "add_sale": [
+      "manager",
+      "md"
+    ],
     "bulk_update": [
       "manager",
       "md"
@@ -15,6 +19,10 @@
       "md",
       "staff",
       "viewer"
+    ],
+    "edit_buyer": [
+      "manager",
+      "md"
     ],
     "edit_obligation": [
       "manager",
@@ -35,6 +43,14 @@
       "md"
     ],
     "manage_settings": [
+      "manager",
+      "md"
+    ],
+    "record_payment": [
+      "manager",
+      "md"
+    ],
+    "reverse_payment": [
       "manager",
       "md"
     ],
@@ -79,6 +95,10 @@
       "sales",
       "staff",
       "viewer"
+    ],
+    "view_sales": [
+      "manager",
+      "md"
     ]
   },
   "roles": [

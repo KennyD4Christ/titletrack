@@ -3,7 +3,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from tracker import services
-from tracker.models import Buyer, Estate, ImportBatch, Obligation, ObligationEvent, Plot, Sale
+from tracker.models import Buyer, Estate, ImportBatch, Obligation, ObligationEvent, Payment, Plot, Sale, SaleEvent
 
 from .errors import ImportStateError, StaleDryRun, UndoBlocked
 from .validation import norm, validate_import
@@ -62,7 +62,7 @@ def commit_batch(batch, actor):
                 buyers[phone_key] = buyer
 
         sale = services.create_sale(company, plot, buyer, row["price"], row["sale_date"],
-                                    row["amount_paid"], row["fully_paid_on"])
+                                    row["amount_paid"], row["fully_paid_on"], actor=actor)
         Sale.objects.filter(pk=sale.pk).update(import_batch=batch)
         counts["sales_created"] += 1
 
@@ -96,6 +96,19 @@ def undo_blockers(batch):
     reused = Sale.objects.filter(buyer__import_batch=batch).exclude(import_batch=batch).count()
     if reused:
         reasons.append(f"{reused} sale(s) were added for buyers created by this import.")
+    paid = (Payment.objects
+            .filter(sale__import_batch=batch, created_at__gt=batch.committed_at)
+            .exclude(kind=Payment.Kind.OPENING)
+            .values("sale_id").distinct().count())
+    if paid:
+        reasons.append(f"{paid} imported sale(s) had payments recorded or changed after the import.")
+    changed = (SaleEvent.objects
+               .filter(sale__import_batch=batch, created_at__gt=batch.committed_at,
+                       action__in=[SaleEvent.Action.BUYER_EDITED, SaleEvent.Action.CANCELLED,
+                                   SaleEvent.Action.REINSTATED])
+               .values("sale_id").distinct().count())
+    if changed:
+        reasons.append(f"{changed} imported sale(s) were edited, cancelled or reinstated after the import.")
     return reasons
 
 
@@ -109,7 +122,7 @@ def undo_batch(batch, actor):
     reasons = undo_blockers(batch)
     if reasons:
         raise UndoBlocked(reasons)
-    Sale.objects.filter(import_batch=batch).delete()           # obligations and their history go with them
+    Sale.objects.filter(import_batch=batch).delete()           # obligations, payments and history go with them
     Plot.objects.filter(import_batch=batch).delete()
     Buyer.objects.filter(import_batch=batch).delete()
     Estate.objects.filter(import_batch=batch, plots__isnull=True).delete()   # keep an estate that gained other plots

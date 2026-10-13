@@ -124,6 +124,7 @@ export default function ObligationDetailPage() {
           <div><dt>Buyer phone</dt><dd>{ob.buyer.phone || "—"}</dd></div>
           <div><dt>Buyer email</dt><dd>{ob.buyer.email || "—"}</dd></div>
         </dl>
+	{can(user, "view_sales") ? <p><Link to={`/sales/${ob.sale}`}>View this sale</Link></p> : null}
       </section>
       {showHistory ? (events.isPending ? <LoadingState label="Loading history…" /> : events.isError ? <ErrorState error={events.error} /> : <History events={events.data} />) : null}
     </div>

@@ -205,3 +205,67 @@ class ImportBatch(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+
+
+class Payment(models.Model):
+    """Append-only payment ledger. Rows are never edited or deleted by the app: a mistake is fixed with a
+    reversal entry. `Sale.amount_paid` is the stored total, updated only by tracker/services.py in the same
+    transaction as the ledger row."""
+
+    class Kind(models.TextChoices):
+        PAYMENT = "payment", "Payment"
+        REVERSAL = "reversal", "Reversal"
+        OPENING = "opening", "Opening balance"
+        ADJUSTMENT = "adjustment", "Adjustment"
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="payments")
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="payments")
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)      # negative for reversals
+    paid_on = models.DateField()
+    reference = models.CharField(max_length=120, blank=True)
+    note = models.TextField(blank=True)                                # a reversal's note is its reason
+    reverses = models.OneToOneField(
+        "self", null=True, blank=True, on_delete=models.RESTRICT, related_name="reversed_by")
+    recorded_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    idempotency_key = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sale", "idempotency_key"], condition=~Q(idempotency_key=""),
+                name="uniq_payment_key_per_sale"),
+            models.CheckConstraint(condition=~Q(amount=0), name="payment_amount_non_zero"),
+            models.CheckConstraint(
+                condition=(
+                    Q(kind__in=["payment", "opening"], amount__gt=0)
+                    | Q(kind="reversal", amount__lt=0)
+                    | Q(kind="adjustment")
+                ),
+                name="payment_amount_sign_matches_kind"),
+        ]
+
+
+class SaleEvent(models.Model):
+    """Sale-level audit history: who did what, when, with before/after values."""
+
+    class Action(models.TextChoices):
+        CREATED = "created", "Sale created"
+        PAYMENT = "payment", "Payment recorded"
+        PAYMENT_REVERSED = "payment_reversed", "Payment reversed"
+        BUYER_EDITED = "buyer_edited", "Buyer details edited"
+        CANCELLED = "cancelled", "Sale cancelled"
+        REINSTATED = "reinstated", "Sale reinstated"
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="events")
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    action = models.CharField(max_length=30, choices=Action.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+    changes = models.JSONField(default=dict, blank=True)     # {"field": [before, after]}
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]

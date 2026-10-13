@@ -63,8 +63,8 @@ describe("menu and page access by role", () => {
     return within(nav).getAllByRole("link").map((a) => a.textContent);
   };
 
-  it.each(["md", "manager"])("%s gets Home, My Queue, Obligations and Import", async (role) => {
-    expect(await menu(role)).toEqual(["Home", "My Queue", "Obligations", "Import"]);
+  it.each(["md", "manager"])("%s gets Home, My Queue, Obligations, Sales and Import", async (role) => {
+    expect(await menu(role)).toEqual(["Home", "My Queue", "Obligations", "Sales", "Import"]);
   });
   it("staff get Home, My Queue and Obligations (no Import)", async () => {
     expect(await menu("staff")).toEqual(["Home", "My Queue", "Obligations"]);
