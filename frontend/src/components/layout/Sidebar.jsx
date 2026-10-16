@@ -8,6 +8,7 @@ const ITEMS = [
   { to: "/obligations", label: "Obligations", action: "view_obligations" },
   { to: "/sales", label: "Sales", action: "view_sales" },
   { to: "/import", label: "Import", action: "import_data" },
+  { to: "/staff", label: "Staff", action: "manage_users" },
 ];
 
 export default function Sidebar() {

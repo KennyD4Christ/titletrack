@@ -46,6 +46,10 @@
       "manager",
       "md"
     ],
+    "manage_users": [
+      "manager",
+      "md"
+    ],
     "record_payment": [
       "manager",
       "md"

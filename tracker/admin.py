@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
 from .models import (
-    Buyer, Company, Department, Estate, Obligation, ObligationEvent,
+    AccountEvent, Buyer, Company, Department, Estate, Obligation, ObligationEvent,
     ObligationType, Payment, Plot, Sale, SaleEvent, User,
 )
 
@@ -100,6 +100,12 @@ class ObligationAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAd
 @admin.register(ObligationEvent)
 class ObligationEventAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAdmin):
     list_display = ["obligation", "actor", "created_at"]
+
+
+@admin.register(AccountEvent)
+class AccountEventAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAdmin):
+    list_display = ["target_email", "action", "actor", "created_at"]
+    list_filter = ["action"]
 
 
 @admin.register(User)

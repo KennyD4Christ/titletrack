@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.db.models import Q
+from django.db.models.functions import Lower
 from django.utils import timezone
 
 
@@ -38,6 +39,14 @@ class User(AbstractUser):
     company = models.ForeignKey(Company, null=True, blank=True, on_delete=models.CASCADE, related_name="users")
     department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL, related_name="members")
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.STAFF)
+    # Bumped whenever a password-setup/reset link is issued, a password is set, or the account is
+    # deactivated. It is part of every link's signed contents, so a bump kills all outstanding links.
+    link_serial = models.PositiveIntegerField(default=0)
+
+    class Meta(AbstractUser.Meta):
+        constraints = [
+            models.UniqueConstraint(Lower("email"), condition=~Q(email=""), name="uniq_user_email_ci"),
+        ]
 
 
 class Estate(models.Model):
@@ -269,3 +278,42 @@ class SaleEvent(models.Model):
 
     class Meta:
         ordering = ["created_at", "id"]
+
+
+class AccountEvent(models.Model):
+    """Account-level audit history (who did what to which account, when, with before/after values).
+    Never holds passwords, tokens or links. Rows are append-only: the app never edits or deletes them."""
+
+    class Action(models.TextChoices):
+        CREATED = "created", "Account created"
+        PROFILE_UPDATED = "profile_updated", "Profile updated"
+        ROLE_CHANGED = "role_changed", "Role changed"
+        DEACTIVATED = "deactivated", "Account deactivated"
+        REACTIVATED = "reactivated", "Account reactivated"
+        SETUP_LINK_ISSUED = "setup_link_issued", "Setup link issued"
+        RESET_LINK_ISSUED = "reset_link_issued", "Reset link issued"
+        PASSWORD_SET = "password_set", "Password set through a link"
+        PASSWORD_CHANGED = "password_changed", "Password changed"
+        EMAIL_FAILED = "email_failed", "Link email not delivered"
+        LINK_REVEALED = "link_revealed", "Link shown to an administrator"
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="account_events")
+    target_user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="account_events")
+    target_email = models.CharField(max_length=254, blank=True)   # the address at the time of the event
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    action = models.CharField(max_length=30, choices=Action.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+    changes = models.JSONField(default=dict, blank=True)     # {"field": [before, after]}
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [models.Index(fields=["company", "target_user"])]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValueError("Account history cannot be changed.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("Account history cannot be deleted.")

@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from api.auth_utils import authenticate_identifier
 from api.permissions import IsCompanyUser
 from api.serializers.auth import LoginSerializer, MeSerializer
 
@@ -27,10 +28,10 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = authenticate(
+        user = authenticate_identifier(
             request,
-            username=serializer.validated_data["username"],
-            password=serializer.validated_data["password"],
+            serializer.validated_data["username"],
+            serializer.validated_data["password"],
         )
         # One generic message for every failure: wrong password, inactive, or no company.
         if user is None or not user.is_active or user.company_id is None:

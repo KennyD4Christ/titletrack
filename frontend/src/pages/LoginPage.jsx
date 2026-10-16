@@ -22,7 +22,7 @@ export default function LoginPage() {
       const from = location.state?.from;
       navigate(from ? `${from.pathname}${from.search || ""}` : "/", { replace: true });
     } catch (err) {
-      setError(err.status === 400 ? "That username and password do not match." : err.message);
+      setError(err.status === 400 ? "That email or username and password do not match." : err.message);
     } finally {
       setBusy(false);
     }
@@ -35,7 +35,7 @@ export default function LoginPage() {
         <p className="muted">Know what you owe every buyer.</p>
         {error ? <p className="form-error" role="alert">{error}</p> : null}
         <label>
-          Username
+          Email or username
           <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus required />
         </label>
         <label>

@@ -24,6 +24,8 @@ MATRIX = {
     "import_data": {MD, MANAGER},
     "manage_settings": {MD, MANAGER},
     "manage_sales": {MD, MANAGER},
+    # Staff accounts: which roles each may manage is decided in tracker/staff_services.py (ROLE_MANAGES).
+    "manage_users": {MD, MANAGER},
     # Sales desk: separate actions on purpose, so a Finance role can be added later by editing one line each.
     "view_sales": {MD, MANAGER},
     "add_sale": {MD, MANAGER},

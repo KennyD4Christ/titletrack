@@ -81,8 +81,31 @@ REST_FRAMEWORK = {
     # Fail closed: a view must declare `required_action` (see api/permissions.py) or it is denied.
     "DEFAULT_PERMISSION_CLASSES": ["api.permissions.ActionPermission"],
     "DEFAULT_PAGINATION_CLASS": "api.pagination.StandardPagination",
+    # Rate limits apply only to views that declare a throttle_scope. NUM_PROXIES=0 ignores X-Forwarded-For
+    # (the connecting address is used). Behind a trusted reverse proxy set NUM_PROXIES to the number of
+    # proxies in front of Django. Never leave it unset: DRF would then trust any client-supplied header.
+    "NUM_PROXIES": env.int("NUM_PROXIES", default=0),
+    "DEFAULT_THROTTLE_RATES": {
+        "account_link": env("THROTTLE_ACCOUNT_LINK", default="20/hour"),        # per IP address
+        "password_change": env("THROTTLE_PASSWORD_CHANGE", default="10/hour"),  # per signed-in user
+    },
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.OrderingFilter",
     ],
 }
+
+# --- Account links and email (optional: the app works with no email provider) ---
+# When False, a new setup/reset link is shown ONCE to the administrator who requested it.
+EMAIL_DELIVERY_ENABLED = env.bool("EMAIL_DELIVERY_ENABLED", default=False)
+# Public address of the React app. Links are built as SITE_URL + /set-password#token=... (never a hard-coded domain).
+SITE_URL = env("SITE_URL", default="http://localhost:5173")
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = env("EMAIL_HOST", default="localhost")
+EMAIL_PORT = env.int("EMAIL_PORT", default=25)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
+EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=10)
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="TitleTrack <no-reply@localhost>")

@@ -14,7 +14,7 @@ describe("signing in and out", () => {
     }));
     renderApp("/obligations?overdue=1");
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText("Username"), "manager_demohomes");
+    await userEvent.type(screen.getByLabelText("Email or username"), "manager_demohomes");
     await userEvent.type(screen.getByLabelText("Password"), "secret");
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByRole("heading", { name: "Obligations" })).toBeInTheDocument();
@@ -26,10 +26,10 @@ describe("signing in and out", () => {
       "POST /api/auth/login/": () => json({ detail: "Invalid credentials." }, 400),
     }));
     renderApp("/");
-    await userEvent.type(await screen.findByLabelText("Username"), "x");
+    await userEvent.type(await screen.findByLabelText("Email or username"), "x");
     await userEvent.type(screen.getByLabelText("Password"), "y");
     await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("That username and password do not match.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("That email or username and password do not match.");
   });
 
   it("signs out and clears the screen", async () => {
@@ -63,8 +63,8 @@ describe("menu and page access by role", () => {
     return within(nav).getAllByRole("link").map((a) => a.textContent);
   };
 
-  it.each(["md", "manager"])("%s gets Home, My Queue, Obligations, Sales and Import", async (role) => {
-    expect(await menu(role)).toEqual(["Home", "My Queue", "Obligations", "Sales", "Import"]);
+  it.each(["md", "manager"])("%s gets Home, My Queue, Obligations, Sales, Import and Staff", async (role) => {
+    expect(await menu(role)).toEqual(["Home", "My Queue", "Obligations", "Sales", "Import", "Staff"]);
   });
   it("staff get Home, My Queue and Obligations (no Import)", async () => {
     expect(await menu("staff")).toEqual(["Home", "My Queue", "Obligations"]);
