@@ -1,0 +1,92 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url 'admin:tracker_company_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+
+{% if stage == "form" %}
+  <p>Creates the company, its departments and its first MD account. The MD has no password: they set one through a
+  one-time link, which is emailed or shown to you once.</p>
+  <form method="post" class="onboard-form">
+    {% csrf_token %}
+    {% if form.errors %}<p class="errornote">Please correct the problem below.</p>{% endif %}
+    {{ form.non_field_errors }}
+    <fieldset class="module aligned">
+      {% for field in form %}
+      <div class="form-row{% if field.errors %} errors{% endif %}">
+        {{ field.errors }}
+        {{ field.label_tag }} {{ field }}
+        {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row"><input type="submit" value="Onboard company" class="default"></div>
+  </form>
+
+{% elif stage == "created" or stage == "reissued" %}
+  {% if stage == "created" %}
+    <ul class="messagelist"><li class="success">Company &ldquo;{{ company.name }}&rdquo; was created with
+    {{ departments|length }} department{{ departments|length|pluralize }} and the MD account {{ md.email }}.
+    Do not submit the form again.</li></ul>
+  {% else %}
+    <ul class="messagelist"><li class="success">A new setup link was issued for {{ md.email }} ({{ company.name }}).
+    Any earlier link no longer works.</li></ul>
+  {% endif %}
+
+  {% if outcome.status == "emailed" %}
+    <p>The setup link was emailed to {{ md.email }}. It works once and expires on
+    {{ outcome.expires_at|date:"Y-m-d H:i" }}.</p>
+  {% elif outcome.status == "revealed" %}
+    <div class="module">
+      <h2>Setup link (shown once)</h2>
+      <p>Works once and expires on {{ outcome.expires_at|date:"Y-m-d H:i" }}. Anyone who sees this link can use it, so
+      deliver it securely and do not paste it into chats or tickets. It is not stored and will not be shown again;
+      reloading this page loses it.</p>
+      <p><input type="text" readonly value="{{ outcome.link }}" size="90" onclick="this.select()"></p>
+    </div>
+  {% else %}
+    <ul class="messagelist"><li class="warning">The email could not be sent (recorded in the account history). The
+    account exists and nothing needs to be entered again.</li></ul>
+    <p><a href="{{ resend_url }}">Issue a new setup link</a> (you can choose to have it shown to you).</p>
+  {% endif %}
+  <p><a href="{% url 'admin:tracker_company_onboard' %}">Onboard another company</a></p>
+
+{% elif stage == "confirm" %}
+  <p>This issues a new setup link for <strong>{{ md.email }}</strong> ({{ company.name }}). Any link already sent to
+  them stops working.</p>
+  <form method="post" class="onboard-form">
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      {% for field in form %}
+      <div class="form-row">{{ field.label_tag }} {{ field }}
+        {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}</div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row"><input type="submit" value="Issue new setup link" class="default"></div>
+  </form>
+
+{% elif stage == "refused" %}
+  <ul class="messagelist"><li class="error">{{ error }}</li></ul>
+  <p><a href="{% url 'admin:tracker_company_changelist' %}">Back to companies</a></p>
+{% endif %}
+
+</div>
+<script>
+document.querySelectorAll("form.onboard-form").forEach(function (f) {
+  f.addEventListener("submit", function () {
+    f.querySelectorAll("input[type=submit]").forEach(function (b) {
+      setTimeout(function () { b.disabled = true; b.value = "Working\u2026"; }, 0);
+    });
+  });
+});
+</script>
+{% endblock %}

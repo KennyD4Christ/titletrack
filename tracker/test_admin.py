@@ -28,6 +28,11 @@ class AdminRulesTests(TestCase):
         field = ma.formfield_for_foreignkey(Plot._meta.get_field("estate"), self.request(self.staff))
         self.assertEqual([e.name for e in field.queryset], ["EA"])
 
+    def test_companies_cannot_be_created_through_the_default_admin_add_form(self):
+        ma = admin.site._registry[Company]
+        for user in (self.root, self.staff):
+            self.assertFalse(ma.has_add_permission(self.request(user)), user.username)
+
     def test_money_ownership_and_history_are_read_only_in_admin(self):
         for model in (Sale, Obligation, ObligationEvent):
             ma = admin.site._registry[model]
