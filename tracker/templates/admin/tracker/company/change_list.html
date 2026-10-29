@@ -1,0 +1,8 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+  {% if onboard_url %}
+    <li><a href="{{ onboard_url }}" class="addlink">Onboard a company</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

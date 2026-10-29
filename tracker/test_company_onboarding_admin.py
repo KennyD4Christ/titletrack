@@ -882,3 +882,81 @@ class DefaultAddRouteTests(TestCase):
             self.assertEqual(self.client.get(url).status_code, 200, name)
         self.assertEqual(self.client.get(onboard_url()).status_code, 403)         # the permission rule is unchanged
         self.assertEqual(self.client.get(resend_url(self.company)).status_code, 403)
+
+
+# ---------- the "Onboard a company" link on the Company changelist ----------
+
+ONBOARD_LINK = re.compile(r'<a href="([^"]+)"[^>]*>\s*Onboard a company\s*</a>')
+
+
+@override_settings(EMAIL_DELIVERY_ENABLED=False, SITE_URL=SITE)
+class OnboardingEntryPointTests(TestCase):
+    """The link is a convenience for designated operators. It is hidden from everyone else, and the page it points
+    to still does its own permission check."""
+
+    def setUp(self):
+        Company.objects.create(name="Existing")
+
+    def changelist(self, user, query=""):
+        self.client.force_login(user)
+        response = self.client.get(changelist_url() + query)
+        self.assertEqual(response.status_code, 200, user.username)
+        return response
+
+    def links(self, response):
+        return ONBOARD_LINK.findall(response.content.decode())
+
+    def test_designated_operators_see_one_link_to_the_onboarding_route(self):
+        users = [
+            make_user("viewer", grant="direct", extra_perms=["view_company"]),
+            make_user("changer", grant="direct", extra_perms=["change_company"]),
+            make_user("root", superuser=True, grant="direct"),
+        ]
+        for user in users:
+            response = self.changelist(user)
+            self.assertEqual(self.links(response), [onboard_url()], user.username)
+            self.assertEqual(response.context["onboard_url"], onboard_url(), user.username)
+
+    def test_the_link_leads_to_the_existing_onboarding_page(self):
+        response = self.changelist(make_user("op", grant="direct", extra_perms=["view_company"]))
+        target = self.client.get(self.links(response)[0])
+        self.assertEqual(target.status_code, 200)
+        self.assertIn("Onboard a company", page_text(target))
+        self.assertEqual(list(target.context["form"].fields)[0], "company")
+
+    def test_the_link_is_hidden_from_everyone_who_is_not_designated(self):
+        add_company_only = ["add_company", "view_company"]
+        every_company_permission = ["add_company", "change_company", "delete_company", "view_company"]
+        users = {
+            "ordinary staff": make_user("staff", extra_perms=["view_company"]),
+            "superuser without the designation": make_user("root", superuser=True),
+            "only Django's add_company permission": make_user("adder", extra_perms=add_company_only),
+            "every ordinary company permission": make_user("allperms", extra_perms=every_company_permission),
+            "permission only through a group": make_user("viaGroup", grant="group", extra_perms=["view_company"]),
+            "superuser, permission only through a group": make_user("rootGroup", superuser=True, grant="group"),
+        }
+        for label, user in users.items():
+            response = self.changelist(user)
+            html = response.content.decode()
+            self.assertEqual(self.links(response), [], label)
+            self.assertNotIn(onboard_url(), html, label)
+            self.assertNotIn("Onboard a company", page_text(response), label)
+            self.assertIsNone(response.context.get("onboard_url"), label)
+
+    def test_losing_the_designation_hides_the_link_on_the_next_request(self):
+        op = make_user("op", grant="direct", extra_perms=["view_company"])
+        self.assertEqual(self.links(self.changelist(op)), [onboard_url()])
+        op.user_permissions.remove(operator_permission())
+        self.assertEqual(self.links(self.changelist(op)), [])
+
+    def test_the_link_survives_list_parameters_and_the_normal_add_form_stays_closed(self):
+        op = make_user("root", superuser=True, grant="direct")
+        response = self.changelist(op, "?o=1")
+        self.assertEqual(self.links(response), [onboard_url()])
+        self.assertFalse(response.context["has_add_permission"])
+        self.assertNotIn(add_url(), response.content.decode())
+        self.assertIn('value="resend_setup_link"', response.content.decode())      # the existing action is untouched
+
+    def test_showing_the_link_does_not_grant_access(self):
+        self.client.force_login(make_user("root", superuser=True))                  # not designated: no link...
+        self.assertEqual(self.client.get(onboard_url()).status_code, 403)           # ...and no access either

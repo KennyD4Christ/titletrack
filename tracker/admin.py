@@ -99,6 +99,15 @@ class CompanyAdmin(admin.ModelAdmin):
     def has_onboard_permission(self, request):
         return onboarding.is_platform_operator(request.user)
 
+    def changelist_view(self, request, extra_context=None):
+        """Designated operators get an "Onboard a company" link above the list (see change_list.html). Showing
+        it is a convenience only: the onboarding page re-checks the permission itself."""
+        extra_context = dict(extra_context or {})
+        if self.has_onboard_permission(request):
+            extra_context["onboard_url"] = reverse(
+                "admin:%s_%s_onboard" % (self.opts.app_label, self.opts.model_name))
+        return super().changelist_view(request, extra_context)
+
     def get_urls(self):
         info = self.opts.app_label, self.opts.model_name
         wrap = self.admin_site.admin_view        # signed-in staff only; the operator check follows in each view
