@@ -247,6 +247,38 @@ class AccountEventAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.Model
 
 @admin.register(User)
 class UserAdmin(CompanyScopedAdminMixin, DjangoUserAdmin):
-    fieldsets = DjangoUserAdmin.fieldsets + (("TitleTrack", {"fields": ("company", "department", "role")}),)
-    add_fieldsets = DjangoUserAdmin.add_fieldsets + (("TitleTrack", {"fields": ("company", "department", "role")}),)
+    fieldsets = DjangoUserAdmin.fieldsets + (
+        ("TitleTrack", {"fields": ("company", "department", "role")}),
+    )
+    add_fieldsets = DjangoUserAdmin.add_fieldsets + (
+        ("TitleTrack", {"fields": ("company", "department", "role")}),
+    )
     list_display = ["username", "role", "company", "is_active"]
+
+    platform_privilege_fields = {
+        "is_staff",
+        "is_superuser",
+        "groups",
+        "user_permissions",
+    }
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+
+        # Only Django superusers may edit platform-level privileges.
+        if request.user.is_superuser:
+            return fieldsets
+
+        safe_fieldsets = []
+        for title, options in fieldsets:
+            fields = tuple(
+                field
+                for field in options.get("fields", ())
+                if field not in self.platform_privilege_fields
+            )
+            if fields:
+                safe_fieldsets.append(
+                    (title, {**options, "fields": fields})
+                )
+
+        return safe_fieldsets
