@@ -758,3 +758,127 @@ class ChangelistActionTests(TestCase):
         response = self.run_action(md, [self.company.pk])
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response["Location"])
+
+
+# ---------- the default add route (/admin/tracker/company/add/) ----------
+
+def add_url():
+    return reverse("admin:tracker_company_add")
+
+
+@override_settings(EMAIL_DELIVERY_ENABLED=False, SITE_URL=SITE)
+class DefaultAddRouteTests(TestCase):
+    """The standard add form is closed for everyone. A designated operator who lands on the add URL is sent to the
+    onboarding page; nobody else gets through, whatever other permissions or flags they hold."""
+
+    def setUp(self):
+        self.company = Company.objects.create(name="Existing")
+        self.data = {"name": "Sneaky Ltd", **FORM}
+
+    def assert_not_created(self, before):
+        self.assertEqual(counts(), before)
+        self.assertFalse(Company.objects.filter(name__in=["Sneaky Ltd", "Acme Estates"]).exists())
+
+    def test_a_designated_operator_is_redirected_to_the_onboarding_page(self):
+        self.client.force_login(make_user("op", grant="direct"))
+        before = counts()
+        response = self.client.get(add_url())
+        self.assertRedirects(response, onboard_url())               # also fetches it: the target page loads
+        self.assertEqual(response["Location"], onboard_url())
+        self.assertEqual(counts(), before)
+
+    def test_a_designated_superuser_is_redirected_the_same_way(self):
+        self.client.force_login(make_user("root", superuser=True, grant="direct"))
+        self.assertRedirects(self.client.get(add_url()), onboard_url())
+
+    def test_the_default_form_is_never_rendered_and_nothing_is_carried_over(self):
+        self.client.force_login(make_user("op", grant="direct"))
+        response = self.client.get(add_url() + "?name=Evil&_changelist_filters=x", follow=True)
+        self.assertEqual(response.redirect_chain, [(onboard_url(), 302)])     # no query string is passed on
+        self.assertIn("Onboard a company", page_text(response))
+        self.assertFalse(response.context["form"].is_bound)
+        self.assertNotContains(response, "Evil")
+
+    def test_posting_company_data_to_the_add_url_creates_nothing(self):
+        self.client.force_login(make_user("op", grant="direct"))
+        before = counts()
+        response = self.client.post(add_url(), self.data)
+        self.assertRedirects(response, onboard_url())
+        self.assert_not_created(before)
+
+    def test_a_superuser_who_is_not_designated_is_refused(self):
+        self.client.force_login(make_user("root", superuser=True))
+        before = counts()
+        for method in (self.client.get, self.client.post):
+            response = method(add_url(), self.data) if method == self.client.post else method(add_url())
+            self.assertEqual(response.status_code, 403)
+            self.assertFalse(response.has_header("Location"))
+        self.assert_not_created(before)
+
+    def test_ordinary_staff_and_group_only_holders_are_refused(self):
+        users = [make_user("staff", company=self.company),
+                 make_user("viaGroup", grant="group"),
+                 make_user("rootGroup", superuser=True, grant="group")]
+        for user in users:
+            self.client.force_login(user)
+            before = counts()
+            self.assertEqual(self.client.get(add_url()).status_code, 403, user.username)
+            self.assertEqual(self.client.post(add_url(), self.data).status_code, 403, user.username)
+            self.assert_not_created(before)
+
+    def test_djangos_own_add_company_permission_does_not_open_the_route(self):
+        user = make_user("adder", extra_perms=["add_company", "view_company", "change_company"])
+        self.client.force_login(user)
+        before = counts()
+        self.assertEqual(self.client.get(add_url()).status_code, 403)
+        self.assertEqual(self.client.post(add_url(), self.data).status_code, 403)
+        self.assert_not_created(before)
+
+    def test_signed_out_and_non_staff_users_are_sent_to_the_login_page(self):
+        md = make_user("md", staff=False, grant="direct", company=self.company, role="md")
+        for who in (None, md):
+            client = Client()
+            if who:
+                client.force_login(who)
+            for response in (client.get(add_url()), client.post(add_url(), self.data)):
+                self.assertEqual(response.status_code, 302)
+                self.assertIn("/admin/login/", response["Location"])
+        self.assertEqual(Company.objects.count(), 1)
+
+    def test_popup_requests_are_refused_even_for_a_designated_operator(self):
+        self.client.force_login(make_user("op", grant="direct"))
+        response = self.client.get(add_url() + "?_popup=1&_to_field=id")
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(response.has_header("Location"))
+
+    def test_the_add_permission_stays_closed_and_no_add_link_is_shown(self):
+        self.client.force_login(make_user("root", superuser=True, grant="direct"))
+        response = self.client.get(changelist_url())
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["has_add_permission"])
+        self.assertNotIn(add_url(), response.content.decode())
+
+    def test_removing_the_designation_closes_the_redirect_at_once(self):
+        op = make_user("op", grant="direct")
+        self.client.force_login(op)
+        self.assertEqual(self.client.get(add_url()).status_code, 302)
+        op.user_permissions.remove(operator_permission())
+        self.assertEqual(self.client.get(add_url()).status_code, 403)
+
+    def test_the_redirect_leads_to_the_real_workflow_and_the_operator_is_audited(self):
+        op = make_user("op", grant="direct")
+        self.client.force_login(op)
+        self.client.get(add_url(), follow=True)
+        response = self.client.post(onboard_url(), FORM)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Company.objects.filter(name="Acme Estates").exists())
+        self.assertEqual(AccountEvent.objects.get(action="created").actor, op)
+
+    def test_other_company_admin_operations_are_unchanged(self):
+        self.client.force_login(make_user("root", superuser=True))               # not designated
+        pk = self.company.pk
+        for name, args in (("changelist", []), ("change", [pk]), ("delete", [pk]), ("history", [pk])):
+            url = reverse(f"admin:tracker_company_{name}", args=args)
+            self.assertEqual(self.client.get(url).status_code, 200, name)
+        self.assertEqual(self.client.get(onboard_url()).status_code, 403)         # the permission rule is unchanged
+        self.assertEqual(self.client.get(resend_url(self.company)).status_code, 403)

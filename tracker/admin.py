@@ -87,6 +87,15 @@ class CompanyAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+    def add_view(self, request, form_url="", extra_context=None):
+        """The standard add form is never shown. A designated operator who reaches this URL is sent to the
+        onboarding page; everyone else is refused. (Signed-out users never get this far: admin_view sends
+        them to the login page.)"""
+        if self.has_onboard_permission(request) and "_popup" not in request.GET:
+            return HttpResponseRedirect(
+                reverse("admin:%s_%s_onboard" % (self.opts.app_label, self.opts.model_name)))
+        raise PermissionDenied
+
     def has_onboard_permission(self, request):
         return onboarding.is_platform_operator(request.user)
 
