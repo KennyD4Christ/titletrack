@@ -56,7 +56,7 @@ def exposure_summary(company, today=None):
 def by_estate(company, today=None):
     today, _ = _now_today(today)
     open_qs = services.open_obligations(company)
-    money = (Sale.objects.filter(company=company, status=Sale.Status.ACTIVE, id__in=open_qs.values("sale_id"))
+    money = (services.exposure_sales(company)
              .values("plot__estate_id", "plot__estate__name")
              .annotate(amount=Sum("amount_paid"), sales=Count("id"), buyers=Count("buyer", distinct=True)))
     work = {r["sale__plot__estate_id"]: r for r in open_qs.values("sale__plot__estate_id").annotate(

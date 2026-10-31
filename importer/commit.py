@@ -3,7 +3,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from tracker import services
-from tracker.models import Buyer, Estate, ImportBatch, Obligation, ObligationEvent, Payment, Plot, Sale, SaleEvent
+from tracker.models import (
+    Buyer, Estate, ImportBatch, Obligation, ObligationEvent, Payment, Plot, Sale, SaleDocument, SaleEvent,
+)
 
 from .errors import ImportStateError, StaleDryRun, UndoBlocked
 from .validation import norm, validate_import
@@ -104,11 +106,21 @@ def undo_blockers(batch):
         reasons.append(f"{paid} imported sale(s) had payments recorded or changed after the import.")
     changed = (SaleEvent.objects
                .filter(sale__import_batch=batch, created_at__gt=batch.committed_at,
-                       action__in=[SaleEvent.Action.BUYER_EDITED, SaleEvent.Action.CANCELLED,
-                                   SaleEvent.Action.REINSTATED])
+                       action__in=[
+                           SaleEvent.Action.BUYER_EDITED,
+                           SaleEvent.Action.CANCELLED,
+                           SaleEvent.Action.REINSTATED,
+                           SaleEvent.Action.DOCUMENT_ADDED,
+                           SaleEvent.Action.DOCUMENT_ISSUED,
+                           SaleEvent.Action.DOCUMENT_ISSUANCE_CORRECTED,
+                           SaleEvent.Action.DOCUMENT_NOT_APPLICABLE,
+                       ])
                .values("sale_id").distinct().count())
     if changed:
-        reasons.append(f"{changed} imported sale(s) were edited, cancelled or reinstated after the import.")
+        reasons.append(f"{changed} imported sale(s) had changes after the import.")
+    documented = SaleDocument.objects.filter(sale__import_batch=batch).values("sale_id").distinct().count()
+    if documented:
+        reasons.append(f"{documented} imported sale(s) have documents that were added after the import.")
     return reasons
 
 

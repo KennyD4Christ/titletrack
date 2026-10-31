@@ -546,14 +546,14 @@ class ImportInteractionTests(TestCase):
         services.edit_buyer(sale, mgr, phone="0803 111 2222")
         with self.assertRaises(UndoBlocked) as ctx:
             undo_batch(batch, mgr)
-        self.assertTrue(any("edited, cancelled or reinstated" in r for r in ctx.exception.reasons))
+        self.assertTrue(any("had changes after the import" in r for r in ctx.exception.reasons))
 
     def test_undo_is_blocked_after_a_cancellation(self):
         co, mgr, batch, sale = self.committed()
         services.cancel_sale(sale, mgr, "defaulted")
         with self.assertRaises(UndoBlocked) as ctx:
             undo_batch(batch, mgr)
-        self.assertTrue(any("edited, cancelled or reinstated" in r for r in ctx.exception.reasons))
+        self.assertTrue(any("had changes after the import" in r for r in ctx.exception.reasons))
 
 
 class DeletionAndAdminTests(LedgerBase):

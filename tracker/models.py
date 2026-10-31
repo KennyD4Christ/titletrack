@@ -106,6 +106,9 @@ class Sale(models.Model):
     cancelled_at = models.DateTimeField(null=True, blank=True)
     cancelled_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
     cancel_reason = models.TextField(blank=True)
+    # True only for a sale created with an explicit document selection. Such a sale gets exactly the documents
+    # chosen for it and never the automatic ones. Every sale that already exists stays False (legacy behaviour).
+    documents_managed = models.BooleanField(default=False, db_default=False)
 
     class Meta:
         constraints = [
@@ -132,9 +135,36 @@ class ObligationType(models.Model):
     sla_days = models.PositiveIntegerField(default=90)
     default_department = models.ForeignKey(Department, null=True, blank=True, on_delete=models.SET_NULL)
     is_active = models.BooleanField(default=True)
+    # False for catalogue-only types: they are never created automatically. Every existing type stays True.
+    auto_generate = models.BooleanField(default=True, db_default=True)
+    # The catalogue entry this type is the work-tracking twin of. Multiple obligation types may share one entry.
+    catalogue_entry = models.ForeignKey(
+        "DocumentType", null=True, blank=True, on_delete=models.PROTECT, related_name="obligation_types")
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["company", "name"], name="uniq_obltype_per_company")]
+
+    def __str__(self):
+        return self.name
+
+
+class DocumentType(models.Model):
+    """One kind of document in a company's catalogue: what a sale can include. The app never deletes a row; a
+    type that has been used is deactivated instead. Its work-tracking twin is the ObligationType that points
+    at it through `ObligationType.catalogue_entry` (reverse name: `obligation_type`)."""
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="document_types")
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    category = models.CharField(max_length=60, blank=True)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint("company", Lower("name"), name="uniq_doctype_name_ci_per_company"),
+        ]
 
     def __str__(self):
         return self.name
@@ -270,6 +300,10 @@ class SaleEvent(models.Model):
         BUYER_EDITED = "buyer_edited", "Buyer details edited"
         CANCELLED = "cancelled", "Sale cancelled"
         REINSTATED = "reinstated", "Sale reinstated"
+        DOCUMENT_ADDED = "document_added", "Document added"
+        DOCUMENT_ISSUED = "document_issued", "Document issued"
+        DOCUMENT_ISSUANCE_CORRECTED = "document_issuance_corrected", "Document issuance corrected"
+        DOCUMENT_NOT_APPLICABLE = "document_not_applicable", "Document marked not applicable"
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE)
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="events")
@@ -281,6 +315,79 @@ class SaleEvent(models.Model):
 
     class Meta:
         ordering = ["created_at", "id"]
+
+
+class DocumentTypeEvent(models.Model):
+    """Catalogue history: who did what to which document type, when, with before/after values.
+    Rows are append-only: the app never edits or deletes them."""
+
+    class Action(models.TextChoices):
+        CREATED = "created", "Document type created"
+        EDITED = "edited", "Document type edited"
+        RENAMED = "renamed", "Document type renamed"
+        ACTIVATED = "activated", "Document type activated"
+        DEACTIVATED = "deactivated", "Document type deactivated"
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="document_type_events")
+    document_type = models.ForeignKey(DocumentType, on_delete=models.PROTECT, related_name="events")
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    action = models.CharField(max_length=30, choices=Action.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+    changes = models.JSONField(default=dict, blank=True)     # {"field": [before, after]}
+    note = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [models.Index(fields=["company", "document_type"], name="doctypeevent_company_type_idx")]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValueError("Document type history cannot be changed.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("Document type history cannot be deleted.")
+
+
+class SaleDocument(models.Model):
+    """One document on one sale: owed to the buyer, already issued, or not required. Never deleted by the app.
+    An owed document is backed by an Obligation (the work of preparing it); the link is kept after issuance.
+    `name_snapshot` is the catalogue name when the document was added, so later renames never change history."""
+
+    class State(models.TextChoices):
+        OWED = "owed", "Owed"
+        ISSUED = "issued", "Issued"
+        NOT_APPLICABLE = "not_applicable", "Not applicable"
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="sale_documents")
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="documents")
+    document_type = models.ForeignKey(DocumentType, on_delete=models.PROTECT, related_name="sale_documents")
+    name_snapshot = models.CharField(max_length=120)
+    state = models.CharField(max_length=20, choices=State.choices, default=State.OWED)
+    obligation = models.OneToOneField(
+        Obligation, null=True, blank=True, on_delete=models.PROTECT, related_name="sale_document")
+    issued_on = models.DateField(null=True, blank=True)
+    reference = models.CharField(max_length=120, blank=True)
+    issued_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    issued_at = models.DateTimeField(null=True, blank=True)
+    not_applicable_reason = models.TextField(blank=True)
+    not_applicable_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    not_applicable_at = models.DateTimeField(null=True, blank=True)
+    added_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["sale", "document_type"], name="one_document_per_sale_and_type"),
+            models.CheckConstraint(
+                condition=~Q(state="owed") | Q(obligation__isnull=False), name="saledoc_owed_has_obligation"),
+            models.CheckConstraint(
+                condition=~Q(state="issued") | Q(issued_on__isnull=False), name="saledoc_issued_has_date"),
+            models.CheckConstraint(
+                condition=~Q(state="not_applicable") | ~Q(not_applicable_reason=""), name="saledoc_na_has_reason"),
+        ]
+        # `sale` needs no explicit index: the foreign key already has one.
+        indexes = [models.Index(fields=["company", "state"], name="saledoc_company_state_idx")]
 
 
 class AccountEvent(models.Model):

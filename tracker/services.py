@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from .importing import clean_amount, clean_date
 from .models import (
-    Buyer, Estate, Obligation, ObligationEvent, ObligationType, Payment, Plot, Sale, SaleEvent,
+    Buyer, Estate, Obligation, ObligationEvent, ObligationType, Payment, Plot, Sale, SaleDocument, SaleEvent,
 )
 
 
@@ -102,11 +102,20 @@ def _log_sale(sale, actor, action, changes=None, note=""):
 
 @transaction.atomic
 def generate_obligations(sale):
-    """Create any obligations this sale is now entitled to. Safe to call repeatedly."""
+    """Create any obligations this sale is now entitled to. Safe to call repeatedly.
+
+    Legacy sales only: a document-managed sale gets exactly the documents chosen for it, never automatic ones.
+    Only active types flagged auto_generate take part, and a type is skipped when the sale already has an
+    issued or not-applicable document for the same catalogue entry."""
     created = []
-    if sale.status != Sale.Status.ACTIVE:
+    if sale.status != Sale.Status.ACTIVE or sale.documents_managed:
         return created
-    for t in ObligationType.objects.filter(company=sale.company, is_active=True):
+    settled = set(SaleDocument.objects.filter(
+        sale=sale, state__in=[SaleDocument.State.ISSUED, SaleDocument.State.NOT_APPLICABLE],
+    ).values_list("document_type_id", flat=True))
+    for t in ObligationType.objects.filter(company=sale.company, is_active=True, auto_generate=True):
+        if t.catalogue_entry_id in settled:
+            continue
         if t.trigger == ObligationType.Trigger.ON_FULL_PAYMENT:
             if sale.fully_paid_on is None:
                 continue
@@ -454,14 +463,19 @@ def open_obligations(company):
         company=company, status__in=Obligation.OPEN_STATUSES, sale__status=Sale.Status.ACTIVE)
 
 
+def exposure_sales(company):
+    """The sales that count towards exposure: ACTIVE sales with at least one open obligation OR at least one
+    owed document. Each sale appears once, however many of either it has. A document stays owed until it is
+    actually issued, so a sale whose preparation work is finished still counts until then."""
+    owed = SaleDocument.objects.filter(company=company, state=SaleDocument.State.OWED)
+    return Sale.objects.filter(company=company, status=Sale.Status.ACTIVE).filter(
+        Q(id__in=open_obligations(company).values("sale_id")) | Q(id__in=owed.values("sale_id")))
+
+
 def exposure(company, fully_paid_only=False):
-    """Money collected on active sales that still have at least one open obligation.
-    Each sale is counted once, however many obligations are open on it."""
-    sales = Sale.objects.filter(
-        company=company,
-        status=Sale.Status.ACTIVE,
-        id__in=open_obligations(company).values("sale_id"),
-    )
+    """Money collected on active sales that still have at least one open obligation or owed document.
+    Each sale is counted once, however many of either it has."""
+    sales = exposure_sales(company)
     if fully_paid_only:
         sales = sales.filter(fully_paid_on__isnull=False)
     agg = sales.aggregate(amount=Sum("amount_paid"), buyers=Count("buyer", distinct=True), sales=Count("id"))
