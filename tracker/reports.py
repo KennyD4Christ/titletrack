@@ -78,7 +78,14 @@ def by_type(company, today=None):
     today, _ = _now_today(today)
     open_qs = services.open_obligations(company)
     rows = []
-    for t in ObligationType.objects.filter(company=company, is_active=True).order_by("name"):
+    # Keep inactive types visible while they still have open work.
+    # open_qs is company-scoped and excludes cancelled sales.
+    types = (
+        ObligationType.objects.filter(company=company)
+        .filter(Q(is_active=True) | Q(pk__in=open_qs.values("obligation_type_id")))
+        .order_by("name")
+    )
+    for t in types:
         of_type = open_qs.filter(obligation_type=t)
         agg = of_type.aggregate(open=Count("id"), overdue=Count("id", filter=Q(due_date__lt=today)),
                                 oldest=Min("started_on"))

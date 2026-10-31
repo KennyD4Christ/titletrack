@@ -190,4 +190,13 @@ class ObligationTypeSerializer(serializers.ModelSerializer):
             clash = clash.exclude(pk=self.instance.pk)
         if clash.exists():
             raise serializers.ValidationError("An obligation type with this name already exists.")
+        if (
+            self.instance is not None
+            and value != self.instance.name
+            and self.instance.obligations.exists()
+        ):
+            raise serializers.ValidationError(
+                "This document type already has obligations, so it cannot be renamed. "
+                "Deactivate it and create a new one."
+            )
         return value

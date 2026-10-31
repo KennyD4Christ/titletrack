@@ -209,6 +209,12 @@ class BuyerAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
 class ObligationTypeAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
     list_display = ["name", "trigger", "sla_days", "is_active", "company"]
 
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if obj is not None and obj.obligations.exists():
+            readonly.append("name")
+        return readonly
+
 
 @admin.register(Sale)
 class SaleAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAdmin):
