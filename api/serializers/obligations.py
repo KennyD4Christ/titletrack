@@ -185,6 +185,13 @@ class ObligationTypeSerializer(serializers.ModelSerializer):
 
     def validate_name(self, value):
         value = value.strip()
+        if (
+            self.instance is not None
+            and value != self.instance.name
+            and self.instance.catalogue_entry_id is not None
+        ):
+            raise serializers.ValidationError(
+                "This type belongs to the document catalogue, so it must be renamed there.")
         clash = ObligationType.objects.filter(company_id=self.context["request"].user.company_id, name__iexact=value)
         if self.instance is not None:
             clash = clash.exclude(pk=self.instance.pk)

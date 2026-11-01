@@ -23,6 +23,7 @@ MATRIX = {
     "bulk_update": {MD, MANAGER},
     "import_data": {MD, MANAGER},
     "manage_settings": {MD, MANAGER},
+    "manage_document_catalogue": {MD, MANAGER},
     "manage_sales": {MD, MANAGER},
     # Staff accounts: which roles each may manage is decided in tracker/staff_services.py (ROLE_MANAGES).
     "manage_users": {MD, MANAGER},

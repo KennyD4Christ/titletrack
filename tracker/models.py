@@ -140,9 +140,22 @@ class ObligationType(models.Model):
     # The catalogue entry this type is the work-tracking twin of. Multiple obligation types may share one entry.
     catalogue_entry = models.ForeignKey(
         "DocumentType", null=True, blank=True, on_delete=models.PROTECT, related_name="obligation_types")
+    # Exactly one work type per catalogue entry is current: the one used for new documents. The others are
+    # earlier work types, kept so obligations created under an earlier name keep it. Set only by the catalogue
+    # services (tracker/document_services.py).
+    is_current = models.BooleanField(default=False, db_default=False)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["company", "name"], name="uniq_obltype_per_company")]
+        constraints = [
+            models.UniqueConstraint(fields=["company", "name"], name="uniq_obltype_per_company"),
+            # At most one current work type per catalogue entry. Rows without an entry are not constrained:
+            # NULLs never collide in a unique index.
+            models.UniqueConstraint(
+                fields=["catalogue_entry"], condition=Q(is_current=True), name="one_current_worktype_per_entry"),
+            # ...and a current work type must belong to an entry.
+            models.CheckConstraint(
+                condition=Q(is_current=False) | Q(catalogue_entry__isnull=False), name="current_worktype_has_entry"),
+        ]
 
     def __str__(self):
         return self.name
