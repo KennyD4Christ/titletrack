@@ -105,16 +105,15 @@ def generate_obligations(sale):
     """Create any obligations this sale is now entitled to. Safe to call repeatedly.
 
     Legacy sales only: a document-managed sale gets exactly the documents chosen for it, never automatic ones.
-    Only active types flagged auto_generate take part, and a type is skipped when the sale already has an
-    issued or not-applicable document for the same catalogue entry."""
+    Only active types flagged auto_generate take part, and a type is skipped when the sale already has a
+    document of any state for the same catalogue entry, whichever of the entry's work types it was created
+    under: an owed document already has its own obligation, so generating another would duplicate it."""
     created = []
     if sale.status != Sale.Status.ACTIVE or sale.documents_managed:
         return created
-    settled = set(SaleDocument.objects.filter(
-        sale=sale, state__in=[SaleDocument.State.ISSUED, SaleDocument.State.NOT_APPLICABLE],
-    ).values_list("document_type_id", flat=True))
+    documented = set(SaleDocument.objects.filter(sale=sale).values_list("document_type_id", flat=True))
     for t in ObligationType.objects.filter(company=sale.company, is_active=True, auto_generate=True):
-        if t.catalogue_entry_id in settled:
+        if t.catalogue_entry_id in documented:
             continue
         if t.trigger == ObligationType.Trigger.ON_FULL_PAYMENT:
             if sale.fully_paid_on is None:
@@ -419,6 +418,20 @@ def edit_buyer(sale, actor, *, full_name=None, phone=None, email=None):
     return buyer
 
 
+def _check_document_status_change(document_state, new_status):
+    """An obligation that belongs to a sale document may not move to a status that contradicts the document.
+    Raises SaleStateError. Only STATUS changes are checked: owner, notes and the rest stay editable."""
+    if document_state == SaleDocument.State.OWED and new_status == Obligation.Status.NOT_APPLICABLE:
+        raise SaleStateError(
+            "This obligation belongs to a document that is still owed. Use 'mark not applicable' on the "
+            "document instead.")
+    if document_state == SaleDocument.State.ISSUED and new_status != Obligation.Status.COMPLETED:
+        raise SaleStateError("The document for this obligation has been issued, so the obligation stays completed.")
+    if document_state == SaleDocument.State.NOT_APPLICABLE and new_status != Obligation.Status.NOT_APPLICABLE:
+        raise SaleStateError(
+            "The document for this obligation was marked not applicable, so the obligation stays not applicable.")
+
+
 @transaction.atomic
 def update_obligation(obligation, actor, note="", **changes):
     """The ONLY way obligations should be edited. Logs before/after and refreshes last_updated_at."""
@@ -427,6 +440,10 @@ def update_obligation(obligation, actor, note="", **changes):
         raise PermissionDenied("Obligation belongs to another company.")
     if obligation.sale.status != Sale.Status.ACTIVE:
         raise SaleStateError("This sale is cancelled, so its obligations are read-only.")
+    if "status" in changes and changes["status"] != obligation.status:
+        document_state = SaleDocument.objects.filter(obligation=obligation).values_list("state", flat=True).first()
+        if document_state is not None:
+            _check_document_status_change(document_state, changes["status"])
     diff = {}
     for field, new in changes.items():
         if field not in TRACKED_FIELDS:
