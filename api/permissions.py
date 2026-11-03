@@ -24,6 +24,9 @@ MATRIX = {
     "import_data": {MD, MANAGER},
     "manage_settings": {MD, MANAGER},
     "manage_document_catalogue": {MD, MANAGER},
+    # Sale documents: separate actions on purpose, so issuance can be widened later by editing one line.
+    "manage_sale_documents": {MD, MANAGER},
+    "issue_document": {MD, MANAGER},
     "manage_sales": {MD, MANAGER},
     # Staff accounts: which roles each may manage is decided in tracker/staff_services.py (ROLE_MANAGES).
     "manage_users": {MD, MANAGER},

@@ -4,6 +4,7 @@ from rest_framework.routers import SimpleRouter
 from api.views.auth import CsrfView, LoginView, LogoutView, MeView
 from api.views.dashboard import DashboardViewSet, MyQueueView
 from api.views.documents import DocumentTypeViewSet
+from api.views.sale_documents import SaleDocumentViewSet
 from api.views.imports import ImportBatchViewSet
 from api.views.obligations import ObligationTypeViewSet, ObligationViewSet
 from api.views.reference import (
@@ -24,6 +25,7 @@ router.register("users", UserViewSet, basename="user")
 router.register("staff", StaffViewSet, basename="staff")
 router.register("obligation-types", ObligationTypeViewSet, basename="obligation-type")
 router.register("document-types", DocumentTypeViewSet, basename="document-type")
+router.register("sale-documents", SaleDocumentViewSet, basename="sale-document")
 router.register("obligations", ObligationViewSet, basename="obligation")
 router.register("imports", ImportBatchViewSet, basename="import")
 router.register("dashboard", DashboardViewSet, basename="dashboard")

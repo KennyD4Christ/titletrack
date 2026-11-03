@@ -38,7 +38,15 @@
       "manager",
       "md"
     ],
+    "issue_document": [
+      "manager",
+      "md"
+    ],
     "manage_document_catalogue": [
+      "manager",
+      "md"
+    ],
+    "manage_sale_documents": [
       "manager",
       "md"
     ],
