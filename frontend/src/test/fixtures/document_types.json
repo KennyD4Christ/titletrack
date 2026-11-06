@@ -1,0 +1,62 @@
+{
+  "count": 11,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 48, "name": "Certificate of Occupancy", "description": "", "category": "Title", "is_active": true,
+      "sort_order": 1, "created_at": "2026-09-01T09:00:00+01:00", "work_type": 148, "sla_days": 90,
+      "default_department": null, "drives_legacy_generation": false
+    },
+    {
+      "id": 49, "name": "Deed of Sublease", "description": "", "category": "Title", "is_active": true,
+      "sort_order": 2, "created_at": "2026-09-01T09:00:00+01:00", "work_type": 149, "sla_days": 60,
+      "default_department": null, "drives_legacy_generation": false
+    },
+    {
+      "id": 50, "name": "Building Permit", "description": "", "category": "Planning", "is_active": true,
+      "sort_order": 3, "created_at": "2026-09-01T09:00:00+01:00", "work_type": 150, "sla_days": 30,
+      "default_department": null, "drives_legacy_generation": false
+    },
+    {
+      "id": 41, "name": "Site Survey Plan", "description": "", "category": "Survey", "is_active": true,
+      "sort_order": 10, "created_at": "2026-08-01T09:00:00+01:00", "work_type": 141, "sla_days": 45,
+      "default_department": 7, "drives_legacy_generation": false
+    },
+    {
+      "id": 42, "name": "Deed of Assignment", "description": "", "category": "Title", "is_active": true,
+      "sort_order": 11, "created_at": "2026-08-01T09:00:00+01:00", "work_type": 142, "sla_days": 90,
+      "default_department": null, "drives_legacy_generation": true
+    },
+    {
+      "id": 43, "name": "Contract of Sale", "description": "", "category": "Sale", "is_active": true,
+      "sort_order": 12, "created_at": "2026-08-01T09:00:00+01:00", "work_type": 143, "sla_days": 30,
+      "default_department": null, "drives_legacy_generation": false
+    },
+    {
+      "id": 44, "name": "Power of Attorney", "description": "", "category": "Title", "is_active": true,
+      "sort_order": 13, "created_at": "2026-08-01T09:00:00+01:00", "work_type": 144, "sla_days": 60,
+      "default_department": null, "drives_legacy_generation": false
+    },
+    {
+      "id": 45, "name": "Site Plan", "description": "", "category": "Survey", "is_active": true,
+      "sort_order": 14, "created_at": "2026-08-01T09:00:00+01:00", "work_type": 145, "sla_days": 45,
+      "default_department": null, "drives_legacy_generation": false
+    },
+    {
+      "id": 46, "name": "Tax Clearance Certificate", "description": "", "category": "Tax", "is_active": true,
+      "sort_order": 15, "created_at": "2026-08-01T09:00:00+01:00", "work_type": 146, "sla_days": 60,
+      "default_department": null, "drives_legacy_generation": false
+    },
+    {
+      "id": 47, "name": "Layout Approval", "description": "", "category": "Planning", "is_active": true,
+      "sort_order": 16, "created_at": "2026-08-01T09:00:00+01:00", "work_type": 147, "sla_days": 30,
+      "default_department": null, "drives_legacy_generation": false
+    },
+    {
+      "id": 51, "name": "Old Transfer Form", "description": "", "category": "Title", "is_active": false,
+      "sort_order": 99, "created_at": "2026-07-01T09:00:00+01:00", "work_type": 151, "sla_days": 30,
+      "default_department": null, "drives_legacy_generation": false
+    }
+  ]
+}

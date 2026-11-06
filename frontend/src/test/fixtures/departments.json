@@ -1,0 +1,9 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    { "id": 7, "name": "Legal" },
+    { "id": 8, "name": "Operations" }
+  ]
+}

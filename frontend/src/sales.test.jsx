@@ -19,6 +19,7 @@ const routes = (extra = {}, role = "manager") =>
     "GET /api/sales-desk/": salesList,
     [`GET /api/sales-desk/${id}/`]: saleDetail,
     "GET /api/sales-desk/buyer-search/": buyerSearch,
+    "GET /api/sale-documents/": { count: 0, next: null, previous: null, results: [] },
     ...extra,
   });
 

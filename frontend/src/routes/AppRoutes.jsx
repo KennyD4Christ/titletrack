@@ -11,6 +11,7 @@ import MyQueuePage from "../pages/MyQueuePage.jsx";
 import ImportWizardPage from "../pages/ImportWizardPage.jsx";
 import ImportHistoryPage from "../pages/ImportHistoryPage.jsx";
 import StaffPage from "../pages/StaffPage.jsx";
+import DocumentCataloguePage from "../pages/DocumentCataloguePage.jsx";
 import LinkPasswordPage from "../pages/LinkPasswordPage.jsx";
 import ChangePasswordPage from "../pages/ChangePasswordPage.jsx";
 import NotFoundPage from "../pages/NotFoundPage.jsx";
@@ -31,6 +32,7 @@ export default function AppRoutes() {
         <Route path="import/history" element={<RequireRole action="import_data"><ImportHistoryPage /></RequireRole>} />
         <Route path="queue" element={<RequireRole action="view_my_queue"><MyQueuePage /></RequireRole>} />
         <Route path="staff" element={<RequireRole action="manage_users"><StaffPage /></RequireRole>} />
+	<Route path="settings/document-catalogue" element={<RequireRole action="manage_document_catalogue"><DocumentCataloguePage /></RequireRole>} />
         <Route path="account/password" element={<ChangePasswordPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

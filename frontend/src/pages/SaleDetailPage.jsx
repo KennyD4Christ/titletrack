@@ -11,6 +11,7 @@ import Money from "../components/common/Money.jsx";
 import RecordPaymentModal from "../components/sales/RecordPaymentModal.jsx";
 import EditBuyerModal from "../components/sales/EditBuyerModal.jsx";
 import ReasonModal from "../components/sales/ReasonModal.jsx";
+import SaleDocumentsSection from "../components/sales/SaleDocumentsSection.jsx";
 import { formatDate, formatDateTime, formatNaira } from "../utils/format.js";
 import {
   PAYMENT_KIND_LABELS, SALE_FIELD_LABELS, SALE_STATUS_LABELS, changeValue,
@@ -83,6 +84,11 @@ export default function SaleDetailPage() {
           {allowed.reinstate ? <button type="button" className="btn" onClick={() => setModal({ type: "reinstate" })}>Reinstate sale</button> : null}
         </div>
       </section>
+
+      <SaleDocumentsSection
+        saleId={id}
+        cancelled={sale.status === "cancelled"}
+      />
 
       <section className="card" aria-labelledby="docs-title">
         <h2 id="docs-title">Documents owed</h2>
