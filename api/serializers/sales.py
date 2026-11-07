@@ -4,7 +4,9 @@ from rest_framework import serializers
 
 from api.permissions import can
 from api.serializers.reference import BuyerSerializer
-from tracker.models import Buyer, Estate, Obligation, Payment, Sale, SaleEvent
+from tracker.models import Buyer, DocumentType, Estate, Obligation, Payment, Sale, SaleDocument, SaleEvent
+from tracker.sale_document_services import REFERENCE_LIMIT, SaleDocumentError, _issue_date, _reference
+from tracker.services import _clean_text
 
 _datetime = serializers.DateTimeField().to_representation
 
@@ -113,8 +115,60 @@ class SaleDeskDetailSerializer(SaleDeskListSerializer):
         }
 
 
+MAX_DOCUMENTS = 50
+_OWED, _ISSUED = SaleDocument.State.OWED, SaleDocument.State.ISSUED
+
+
+class SaleCreateDocumentList(serializers.ListSerializer):
+    """The `documents` list of a new sale. It remembers which document types the request has chosen so far, so a
+    type chosen twice is reported against its LATER position, in the same answer as every other problem."""
+
+    def to_internal_value(self, data):
+        self.chosen_types = set()
+        return super().to_internal_value(data)
+
+
+class SaleCreateDocumentSerializer(serializers.Serializer):
+    """One document chosen while a sale is created: owed, or already issued (with its issue date).
+    There is deliberately NO obligation or company field: tracker/sale_document_services.py finds or creates the
+    obligation and uses the sale's own company, so a client can never attach someone else's. Anything not listed
+    here is ignored. The types offered are the caller's own company's (set in SaleCreateSerializer.__init__)."""
+    document_type = serializers.PrimaryKeyRelatedField(queryset=DocumentType.objects.none())
+    state = serializers.ChoiceField(choices=[_OWED, _ISSUED])
+    issued_on = serializers.DateField(required=False, allow_null=True)
+    reference = serializers.CharField(required=False, allow_blank=True, max_length=REFERENCE_LIMIT)
+
+    class Meta:
+        list_serializer_class = SaleCreateDocumentList
+
+    def validate_document_type(self, entry):
+        chosen = getattr(self.parent, "chosen_types", None)
+        if chosen is not None:
+            if entry.pk in chosen:
+                raise serializers.ValidationError("This document type is already in the list.")
+            chosen.add(entry.pk)
+        return entry
+
+    def validate(self, attrs):
+        """The same rules (and wording) as add_document, checked here so every problem in the list is reported at
+        once. add_document checks them again, so this is only a convenience, never the only guard."""
+        if attrs["state"] == _ISSUED:
+            try:
+                _issue_date(attrs.get("issued_on"))
+                _reference(attrs.get("reference", ""))
+            except SaleDocumentError as exc:
+                raise serializers.ValidationError({exc.field: [str(exc)]}) from None
+        elif attrs.get("issued_on") is not None or _clean_text(attrs.get("reference", "")):
+            raise serializers.ValidationError(
+                {"issued_on": ["An issue date and reference can only be given for an issued document."]})
+        return attrs
+
+
 class SaleCreateSerializer(serializers.Serializer):
-    """Add a sale. Amounts are taken as text and checked by tracker/services.py, the one place with the rules."""
+    """Add a sale. Amounts are taken as text and checked by tracker/services.py, the one place with the rules.
+
+    `documents` is optional. Omitted or [] creates the sale exactly as before; a non-empty list creates it
+    document-managed with exactly those documents (null is refused)."""
     estate = serializers.PrimaryKeyRelatedField(queryset=Estate.objects.none(), required=False)
     estate_name = serializers.CharField(required=False, allow_blank=True, max_length=200)
     plot_number = serializers.CharField(max_length=50)
@@ -125,6 +179,7 @@ class SaleCreateSerializer(serializers.Serializer):
     price = serializers.CharField()
     amount_paid = serializers.CharField(required=False, default="0")
     sale_date = serializers.DateField()
+    documents = SaleCreateDocumentSerializer(many=True, required=False, max_length=MAX_DOCUMENTS)
     paid_on = serializers.DateField(required=False, allow_null=True)
 
     def __init__(self, *args, **kwargs):
@@ -133,6 +188,10 @@ class SaleCreateSerializer(serializers.Serializer):
         # Another company's estate or buyer simply does not exist as a valid choice.
         self.fields["estate"].queryset = Estate.objects.filter(company_id=company_id)
         self.fields["buyer"].queryset = Buyer.objects.filter(company_id=company_id)
+        # Likewise another company's document type does not exist as a choice. An INACTIVE type of the caller's
+        # own company is a valid choice here and is refused (409) by add_document.
+        self.fields["documents"].child.fields["document_type"].queryset = DocumentType.objects.filter(
+            company_id=company_id)
 
 
 class PaymentCreateSerializer(serializers.Serializer):

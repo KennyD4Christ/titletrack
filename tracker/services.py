@@ -138,11 +138,12 @@ def generate_obligations(sale):
 
 
 @transaction.atomic
-def create_sale(company, plot, buyer, price, sale_date, amount_paid=0, paid_on=None, actor=None):
+def create_sale(company, plot, buyer, price, sale_date, amount_paid=0, paid_on=None, actor=None, *,
+                documents_managed=False):
     amount_paid = Decimal(amount_paid)
     sale = Sale(
         company=company, plot=plot, buyer=buyer, price=Decimal(price),
-        amount_paid=amount_paid, sale_date=sale_date,
+        amount_paid=amount_paid, sale_date=sale_date, documents_managed=documents_managed,
     )
     if amount_paid >= sale.price:
         sale.fully_paid_on = paid_on or sale_date
@@ -313,7 +314,7 @@ def _get_or_create_plot(company, estate, number):
 
 @transaction.atomic
 def add_sale(company, actor, *, plot_number, price, sale_date, estate=None, estate_name="", buyer=None,
-             buyer_name="", phone="", email="", amount_paid=0, paid_on=None):
+             buyer_name="", phone="", email="", amount_paid=0, paid_on=None, documents_managed=False):
     """Direct entry of a new sale. Everything is checked first and written in one transaction, so a refusal
     leaves nothing behind (no stray estate, plot or buyer). A new buyer is ALWAYS a new person: buyers are
     never merged on name alone. To reuse a person, pass `buyer`.
@@ -368,7 +369,8 @@ def add_sale(company, actor, *, plot_number, price, sale_date, estate=None, esta
         buyer = Buyer.objects.create(company=company, full_name=buyer_name, phone=phone, email=email)
     try:
         with transaction.atomic():
-            return create_sale(company, plot, buyer, price, sale_date, amount_paid, paid_on, actor=actor)
+            return create_sale(company, plot, buyer, price, sale_date, amount_paid, paid_on, actor=actor,
+                               documents_managed=documents_managed)
     except IntegrityError:
         current = _active_sale_on(plot)                       # lost a race for the same plot
         if current is not None:

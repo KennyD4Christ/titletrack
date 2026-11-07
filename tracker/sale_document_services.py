@@ -19,7 +19,8 @@ Rules implemented here:
   obligation is still OPEN. A completed or not-applicable one is refused and left exactly as it is: it may
   already stand for a document that was issued or delivered, so it must be reviewed, not reopened. On a
   document-managed sale an existing obligation should not exist and the request is refused. With none, an
-  obligation is created under the entry's CURRENT work type (started today, due after that type's SLA,
+  obligation is created under the entry's CURRENT work type (started today, or on the sale date when the sale is
+  created together with its documents, due after that type's SLA,
   default department).
 - Adding an ISSUED document needs an issue date and creates no obligation. If the sale already has an
   obligation for that entry it is refused: add the document as owed, then issue it.
@@ -28,6 +29,10 @@ Rules implemented here:
 - A correction changes the issue date and/or reference, needs a reason, keeps who first issued the document and
   when, and records before/after values and the correcting user.
 - Every step writes a SaleEvent (and an ObligationEvent where an obligation is involved).
+- A sale can also be created together with its documents (`add_sale_with_documents`, Phase 8A): ONE transaction
+  covers the sale, the document-managed flag, every selected document, its obligation and every audit event,
+  so any failure leaves nothing behind. Those documents go through `add_document` unchanged, except that an
+  owed document's obligation starts on the sale date instead of today.
 
 Raises SaleDocumentError (bad input, `.field` names the input at fault), SaleDocumentStateError (wrong state,
 a SaleStateError so the existing 409 handling applies) and django PermissionDenied (another company).
@@ -40,7 +45,9 @@ from django.utils import timezone
 
 from .document_services import current_work_type
 from .models import DocumentType, Obligation, ObligationEvent, Sale, SaleDocument, SaleEvent
-from .services import SaleStateError, _checked_date, _clean_text, _log_sale, update_obligation
+from .services import (
+    SaleStateError, _checked_date, _clean_text, _log_sale, add_sale, update_obligation,
+)
 
 MIN_REASON = 3
 REASON_LIMIT = 1000
@@ -129,8 +136,12 @@ def _iso(value):
 # ---------- writes ----------
 
 @transaction.atomic
-def add_document(sale, actor, document_type, state, issued_on=None, reference=""):
-    """Add one catalogue document to a sale, as OWED or already ISSUED (see the module notes)."""
+def add_document(sale, actor, document_type, state, issued_on=None, reference="", *, started_on=None):
+    """Add one catalogue document to a sale, as OWED or already ISSUED (see the module notes).
+
+    `started_on` is only for a sale that is being created together with its documents: the obligation of an
+    OWED document then starts on that date (the sale date) instead of today. Every other caller leaves it out
+    and keeps the original behaviour."""
     sale = _lock_sale(sale.pk, actor)
     entry = DocumentType.objects.select_for_update().get(pk=document_type.pk)
     if entry.company_id != sale.company_id:
@@ -194,10 +205,10 @@ def add_document(sale, actor, document_type, state, issued_on=None, reference=""
                     if work is None:
                         raise SaleDocumentStateError(
                             "This document type has no current work type, so it cannot be added.", "document_type")
-                    today = timezone.localdate()
+                    start = started_on if started_on is not None else timezone.localdate()
                     obligation = Obligation.objects.create(
-                        company=sale.company, sale=sale, obligation_type=work, started_on=today,
-                        due_date=today + timedelta(days=work.sla_days), department=work.default_department)
+                        company=sale.company, sale=sale, obligation_type=work, started_on=start,
+                        due_date=start + timedelta(days=work.sla_days), department=work.default_department)
                     ObligationEvent.objects.create(
                         company=sale.company, obligation=obligation, actor=actor,
                         note=f"Created for the sale's document '{entry.name}'")
@@ -292,3 +303,52 @@ def correct_issuance(document, actor, reason, issued_on=None, reference=None):
         update_obligation(obligation, actor, note=f"Issuance corrected: {reason}")
     _log_sale(sale, actor, SaleEvent.Action.DOCUMENT_ISSUANCE_CORRECTED, changes, f"{doc.name_snapshot}: {reason}")
     return doc
+
+
+# ---------- a sale created together with its documents (Phase 8A) ----------
+
+class SaleDocumentsError(Exception):
+    """One document of a sale-with-documents request was refused. `index` is its position in the submitted list
+    and `cause` is the original SaleDocumentError (bad input) or SaleDocumentStateError (wrong state). It is
+    deliberately NOT a ValueError or SaleStateError, so no existing handler can answer it by accident."""
+
+    def __init__(self, index, cause):
+        self.index = index
+        self.cause = cause
+        super().__init__(f"Document {index + 1}: {cause}")
+
+    @property
+    def field(self):
+        return getattr(self.cause, "field", None)
+
+    @property
+    def is_state_error(self):
+        return isinstance(self.cause, SaleStateError)
+
+
+@transaction.atomic
+def add_sale_with_documents(company, actor, documents, **sale_fields):
+    """Create a sale together with its selected documents in ONE transaction.
+
+    `documents` is a NON-EMPTY list of dicts: `document_type` (a DocumentType), `state` ("owed" or "issued") and,
+    for an issued document, `issued_on` and an optional `reference`. `sale_fields` are the keyword arguments of
+    services.add_sale (plot_number, price, sale_date, ...).
+
+    The sale is created document-managed from its very first save, so no automatic obligation is ever generated
+    for it. Each document then goes through add_document unchanged, in the order given, except that an owed
+    document's obligation starts on the sale date instead of today.
+
+    Anything that goes wrong rolls back everything: the sale, estate, plot, buyer, opening payment, documents,
+    obligations and every audit event. Raises what add_sale raises (ValueError, PlotOccupied, PermissionDenied),
+    SaleDocumentsError naming the position of the document that was refused, and ValueError for an empty list
+    (a sale without documents is created with services.add_sale)."""
+    if not documents:
+        raise ValueError("Select at least one document.")
+    sale = add_sale(company, actor, documents_managed=True, **sale_fields)
+    for index, item in enumerate(documents):
+        try:
+            add_document(sale, actor, item["document_type"], item["state"], issued_on=item.get("issued_on"),
+                         reference=item.get("reference", ""), started_on=sale.sale_date)
+        except (SaleDocumentError, SaleStateError) as exc:
+            raise SaleDocumentsError(index, exc) from exc
+    return sale
