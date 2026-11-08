@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from .importing import clean_amount, clean_date
 from .models import (
-    Buyer, Estate, Obligation, ObligationEvent, ObligationType, Payment, Plot, Sale, SaleEvent,
+    Buyer, Estate, Obligation, ObligationEvent, ObligationType, Payment, Plot, Sale, SaleDocument, SaleEvent,
 )
 
 
@@ -102,11 +102,19 @@ def _log_sale(sale, actor, action, changes=None, note=""):
 
 @transaction.atomic
 def generate_obligations(sale):
-    """Create any obligations this sale is now entitled to. Safe to call repeatedly."""
+    """Create any obligations this sale is now entitled to. Safe to call repeatedly.
+
+    Legacy sales only: a document-managed sale gets exactly the documents chosen for it, never automatic ones.
+    Only active types flagged auto_generate take part, and a type is skipped when the sale already has a
+    document of any state for the same catalogue entry, whichever of the entry's work types it was created
+    under: an owed document already has its own obligation, so generating another would duplicate it."""
     created = []
-    if sale.status != Sale.Status.ACTIVE:
+    if sale.status != Sale.Status.ACTIVE or sale.documents_managed:
         return created
-    for t in ObligationType.objects.filter(company=sale.company, is_active=True):
+    documented = set(SaleDocument.objects.filter(sale=sale).values_list("document_type_id", flat=True))
+    for t in ObligationType.objects.filter(company=sale.company, is_active=True, auto_generate=True):
+        if t.catalogue_entry_id in documented:
+            continue
         if t.trigger == ObligationType.Trigger.ON_FULL_PAYMENT:
             if sale.fully_paid_on is None:
                 continue
@@ -130,11 +138,12 @@ def generate_obligations(sale):
 
 
 @transaction.atomic
-def create_sale(company, plot, buyer, price, sale_date, amount_paid=0, paid_on=None, actor=None):
+def create_sale(company, plot, buyer, price, sale_date, amount_paid=0, paid_on=None, actor=None, *,
+                documents_managed=False):
     amount_paid = Decimal(amount_paid)
     sale = Sale(
         company=company, plot=plot, buyer=buyer, price=Decimal(price),
-        amount_paid=amount_paid, sale_date=sale_date,
+        amount_paid=amount_paid, sale_date=sale_date, documents_managed=documents_managed,
     )
     if amount_paid >= sale.price:
         sale.fully_paid_on = paid_on or sale_date
@@ -305,7 +314,7 @@ def _get_or_create_plot(company, estate, number):
 
 @transaction.atomic
 def add_sale(company, actor, *, plot_number, price, sale_date, estate=None, estate_name="", buyer=None,
-             buyer_name="", phone="", email="", amount_paid=0, paid_on=None):
+             buyer_name="", phone="", email="", amount_paid=0, paid_on=None, documents_managed=False):
     """Direct entry of a new sale. Everything is checked first and written in one transaction, so a refusal
     leaves nothing behind (no stray estate, plot or buyer). A new buyer is ALWAYS a new person: buyers are
     never merged on name alone. To reuse a person, pass `buyer`.
@@ -360,7 +369,8 @@ def add_sale(company, actor, *, plot_number, price, sale_date, estate=None, esta
         buyer = Buyer.objects.create(company=company, full_name=buyer_name, phone=phone, email=email)
     try:
         with transaction.atomic():
-            return create_sale(company, plot, buyer, price, sale_date, amount_paid, paid_on, actor=actor)
+            return create_sale(company, plot, buyer, price, sale_date, amount_paid, paid_on, actor=actor,
+                               documents_managed=documents_managed)
     except IntegrityError:
         current = _active_sale_on(plot)                       # lost a race for the same plot
         if current is not None:
@@ -410,6 +420,20 @@ def edit_buyer(sale, actor, *, full_name=None, phone=None, email=None):
     return buyer
 
 
+def _check_document_status_change(document_state, new_status):
+    """An obligation that belongs to a sale document may not move to a status that contradicts the document.
+    Raises SaleStateError. Only STATUS changes are checked: owner, notes and the rest stay editable."""
+    if document_state == SaleDocument.State.OWED and new_status == Obligation.Status.NOT_APPLICABLE:
+        raise SaleStateError(
+            "This obligation belongs to a document that is still owed. Use 'mark not applicable' on the "
+            "document instead.")
+    if document_state == SaleDocument.State.ISSUED and new_status != Obligation.Status.COMPLETED:
+        raise SaleStateError("The document for this obligation has been issued, so the obligation stays completed.")
+    if document_state == SaleDocument.State.NOT_APPLICABLE and new_status != Obligation.Status.NOT_APPLICABLE:
+        raise SaleStateError(
+            "The document for this obligation was marked not applicable, so the obligation stays not applicable.")
+
+
 @transaction.atomic
 def update_obligation(obligation, actor, note="", **changes):
     """The ONLY way obligations should be edited. Logs before/after and refreshes last_updated_at."""
@@ -418,6 +442,10 @@ def update_obligation(obligation, actor, note="", **changes):
         raise PermissionDenied("Obligation belongs to another company.")
     if obligation.sale.status != Sale.Status.ACTIVE:
         raise SaleStateError("This sale is cancelled, so its obligations are read-only.")
+    if "status" in changes and changes["status"] != obligation.status:
+        document_state = SaleDocument.objects.filter(obligation=obligation).values_list("state", flat=True).first()
+        if document_state is not None:
+            _check_document_status_change(document_state, changes["status"])
     diff = {}
     for field, new in changes.items():
         if field not in TRACKED_FIELDS:
@@ -454,14 +482,19 @@ def open_obligations(company):
         company=company, status__in=Obligation.OPEN_STATUSES, sale__status=Sale.Status.ACTIVE)
 
 
+def exposure_sales(company):
+    """The sales that count towards exposure: ACTIVE sales with at least one open obligation OR at least one
+    owed document. Each sale appears once, however many of either it has. A document stays owed until it is
+    actually issued, so a sale whose preparation work is finished still counts until then."""
+    owed = SaleDocument.objects.filter(company=company, state=SaleDocument.State.OWED)
+    return Sale.objects.filter(company=company, status=Sale.Status.ACTIVE).filter(
+        Q(id__in=open_obligations(company).values("sale_id")) | Q(id__in=owed.values("sale_id")))
+
+
 def exposure(company, fully_paid_only=False):
-    """Money collected on active sales that still have at least one open obligation.
-    Each sale is counted once, however many obligations are open on it."""
-    sales = Sale.objects.filter(
-        company=company,
-        status=Sale.Status.ACTIVE,
-        id__in=open_obligations(company).values("sale_id"),
-    )
+    """Money collected on active sales that still have at least one open obligation or owed document.
+    Each sale is counted once, however many of either it has."""
+    sales = exposure_sales(company)
     if fully_paid_only:
         sales = sales.filter(fully_paid_on__isnull=False)
     agg = sales.aggregate(amount=Sum("amount_paid"), buyers=Count("buyer", distinct=True), sales=Count("id"))

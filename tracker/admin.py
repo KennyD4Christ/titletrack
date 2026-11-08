@@ -211,6 +211,7 @@ class ObligationTypeAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         readonly = list(super().get_readonly_fields(request, obj))
+        readonly += ["catalogue_entry", "is_current"]        # managed only through the document catalogue
         if obj is not None and obj.obligations.exists():
             readonly.append("name")
         return readonly

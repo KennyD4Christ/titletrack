@@ -32,7 +32,7 @@ class ImportBatchViewSet(CompanyScopedMixin, mixins.ListModelMixin, mixins.Retri
     # ---- helpers ----
 
     def _type_names(self, request):
-        return set(ObligationType.objects.filter(company_id=request.user.company_id, is_active=True)
+        return set(ObligationType.objects.filter(company_id=request.user.company_id, is_active=True, auto_generate=True)
                    .values_list("name", flat=True))
 
     def _editable(self):

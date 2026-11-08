@@ -2,14 +2,16 @@ from django.db.models import Count, F, Q
 from django_filters import rest_framework as df
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 
 from api.mixins import CompanyScopedMixin
+from api.permissions import can
 from api.serializers.sales import (
     BuyerEditSerializer, CancelSerializer, PaymentCreateSerializer, PaymentSerializer, ReinstateSerializer,
     ReversePaymentSerializer, SaleCreateSerializer, SaleDeskDetailSerializer, SaleDeskListSerializer,
 )
+from tracker import sale_document_services as sale_documents
 from tracker import services
 from tracker.models import Buyer, Obligation, Payment, Sale
 
@@ -46,6 +48,30 @@ def _refusal(exc):
     if isinstance(exc, services.SaleStateError):
         return Response({"detail": str(exc)}, status=409)
     return Response({"detail": str(exc)}, status=400)
+
+
+def _documents_refusal(exc):
+    """A refused document, answered the way DRF answers a bad item in a list: {"documents": {"<position>": {field:
+    [message]}}}, so it looks exactly like the serializer's own errors and a form can show the message beside
+    the right row. 409 when the document is in the wrong state (for example an inactive type), 400 when its
+    input breaks a rule."""
+    problem = {exc.field or "non_field_errors": [str(exc.cause)]}
+    return Response({"documents": {exc.index: problem}}, status=409 if exc.is_state_error else 400)
+
+
+def _require_document_permissions(user, documents):
+    """Choosing documents while adding a sale needs more than add_sale (the role matrix itself is unchanged):
+    manage_sale_documents for any selection, and issue_document as well when any document is already issued.
+    `documents` is the raw value (checked first, so nobody learns anything about a request they may not make) or
+    the validated list (checked again). Nothing, null and an empty list need only add_sale."""
+    if not documents:
+        return
+    if not can(user, "manage_sale_documents"):
+        raise PermissionDenied("You do not have permission to add documents to a sale.")
+    items = documents if isinstance(documents, list) else []
+    issued = any(isinstance(item, dict) and item.get("state") == "issued" for item in items)
+    if issued and not can(user, "issue_document"):
+        raise PermissionDenied("You do not have permission to record a document as already issued.")
 
 
 def _created(obligations):
@@ -101,13 +127,35 @@ class SalesDeskViewSet(CompanyScopedMixin, mixins.ListModelMixin, mixins.Retriev
     # ---- writes ----
 
     def create(self, request, *args, **kwargs):
+        raw_documents = request.data.get("documents") if hasattr(request.data, "get") else None
+        _require_document_permissions(request.user, raw_documents)
         data = self._input(SaleCreateSerializer)
+        documents = data.get("documents")
+        _require_document_permissions(request.user, documents)
+        if documents:
+            return self._create_with_documents(request, data, documents)
         try:
             sale = services.add_sale(
                 request.user.company, request.user, plot_number=data["plot_number"], price=data["price"],
                 sale_date=data["sale_date"], estate=data.get("estate"), estate_name=data.get("estate_name", ""),
                 buyer=data.get("buyer"), buyer_name=data.get("buyer_name", ""), phone=data.get("phone", ""),
                 email=data.get("email", ""), amount_paid=data.get("amount_paid", "0"), paid_on=data.get("paid_on"))
+        except (ValueError, services.SaleStateError) as exc:
+            return _refusal(exc)
+        return Response(self._detail(sale.pk), status=201)
+
+    def _create_with_documents(self, request, data, documents):
+        """A sale created together with its chosen documents, in ONE transaction (see
+        tracker/sale_document_services.add_sale_with_documents). The answer is the usual sale detail."""
+        try:
+            sale = sale_documents.add_sale_with_documents(
+                request.user.company, request.user, documents, plot_number=data["plot_number"],
+                price=data["price"], sale_date=data["sale_date"], estate=data.get("estate"),
+                estate_name=data.get("estate_name", ""), buyer=data.get("buyer"),
+                buyer_name=data.get("buyer_name", ""), phone=data.get("phone", ""), email=data.get("email", ""),
+                amount_paid=data.get("amount_paid", "0"), paid_on=data.get("paid_on"))
+        except sale_documents.SaleDocumentsError as exc:
+            return _documents_refusal(exc)
         except (ValueError, services.SaleStateError) as exc:
             return _refusal(exc)
         return Response(self._detail(sale.pk), status=201)

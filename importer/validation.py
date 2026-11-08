@@ -48,7 +48,8 @@ def validate_import(batch, today=None):
     today = today or timezone.localdate()
     headers = batch.headers
     mapping = batch.mapping or {}
-    types = {t.name: t for t in ObligationType.objects.filter(company_id=batch.company_id, is_active=True)}
+    types = {t.name: t for t in ObligationType.objects.filter(
+        company_id=batch.company_id, is_active=True, auto_generate=True)}
     problems = mapping_problems(mapping, headers, set(types))
     if problems:
         return _empty_report(problems), []
