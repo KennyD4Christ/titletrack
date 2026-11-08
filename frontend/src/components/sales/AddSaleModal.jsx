@@ -5,6 +5,14 @@ import { createSale, searchBuyers } from "../../api/sales.js";
 import Modal from "../common/Modal.jsx";
 import { plural } from "../../utils/format.js";
 import { toAmount, todayIso } from "../../utils/sales.js";
+import { listAllActiveDocumentTypes } from "../../api/pagedLists.js";
+import { useAuth } from "../../context/AuthContext.jsx";
+import { can } from "../../utils/permissions.js";
+import ChooseSaleDocuments from "./ChooseSaleDocuments.jsx";
+import {
+  AUTOMATIC_NOTE, CHOOSE_HINT, buildDocuments, documentFailure, documentsProblem, sortedActiveTypes,
+  startingChoice, withoutRow,
+} from "../../utils/newSaleDocuments.js";
 
 const NEW = "__new__";
 
@@ -22,6 +30,39 @@ export default function AddSaleModal({ estates = [], onClose, onCreated }) {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Choosing the documents of this sale (Phase 8B). Left on "automatic", nothing below changes: no catalogue
+  // read, no `documents` in the request, and the server creates the automatic documents as before.
+  const { user } = useAuth();
+  const canChoose = can(user, "manage_sale_documents");
+  const canIssue = can(user, "issue_document");
+  const [docMode, setDocMode] = useState("automatic");
+  const [choices, setChoices] = useState({});
+  const [docFailure, setDocFailure] = useState(null);
+  const choosing = canChoose && docMode === "choose";
+  const catalogue = useQuery({
+    queryKey: ["new-sale", "document-types"],
+    queryFn: () => listAllActiveDocumentTypes(),
+    enabled: choosing,
+    gcTime: 0,
+    retry: false,
+  });
+  const types = catalogue.data ? sortedActiveTypes(catalogue.data.results) : [];
+  function changeMode(mode) {
+    setDocMode(mode);
+    setError(null);
+    setDocFailure(null);
+  }
+  function changeChoice(typeId, patch) {
+    setChoices((all) => {
+      if (patch === null) {
+        const rest = { ...all };
+        delete rest[typeId];
+        return rest;
+      }
+      return { ...all, [typeId]: { ...(all[typeId] || startingChoice()), ...patch } };
+    });
+    setDocFailure((failure) => withoutRow(failure, typeId));     // a changed document no longer shows its old message
+  }
   const set = (key) => (event) => setForm((f) => ({ ...f, [key]: event.target.value }));
 
   useEffect(() => {
@@ -53,6 +94,11 @@ export default function AddSaleModal({ estates = [], onClose, onCreated }) {
     if (form.paid_on) payload.paid_on = form.paid_on;
   }
 
+  // Only a chosen list is sent: leaving `documents` out is how the server is asked for the automatic documents.
+  const documents = choosing && catalogue.isSuccess ? buildDocuments(types, choices, canIssue) : [];
+  if (documents.length > 0) payload.documents = documents;
+  const docsProblem = choosing ? documentsProblem({ status: catalogue.status, types, choices }) : null;
+
   const paidInFull = !Number.isNaN(toAmount(form.amount_paid)) && toAmount(form.amount_paid) > 0
     && toAmount(form.amount_paid) === toAmount(form.price);
   const fieldErrors = error?.fieldErrors || {};
@@ -60,14 +106,17 @@ export default function AddSaleModal({ estates = [], onClose, onCreated }) {
 
   async function submit(event) {
     event.preventDefault();
-    if (!valid) return;
+    if (!valid || docsProblem) return;
     setBusy(true);
     setError(null);
+    setDocFailure(null);
     try {
       const sale = await createSale(payload);
       await onCreated(sale);
     } catch (err) {
       setError(err);
+      // Position i of the server's answer is the i-th document that was sent.
+      setDocFailure(documentFailure(err, documents.map((d) => d.document_type)));
     } finally {
       setBusy(false);
     }
@@ -76,7 +125,7 @@ export default function AddSaleModal({ estates = [], onClose, onCreated }) {
   return (
     <Modal title="Add a sale" onClose={onClose}>
       <form className="edit-form" onSubmit={submit}>
-        {error && !Object.keys(fieldErrors).length ? (
+        {error && !Object.keys(fieldErrors).length && !docFailure ? (
           <div className="form-error" role="alert">
             <p>{error.message}</p>
             {error.data?.existing_sale ? <p><Link to={`/sales/${error.data.existing_sale.id}`}>View that sale</Link></p> : null}
@@ -183,11 +232,43 @@ export default function AddSaleModal({ estates = [], onClose, onCreated }) {
             </label>
           ) : null}
         </div>
+        {canChoose ? (
+          <fieldset className="map-group">
+            <legend>Documents</legend>
+            <div className="inline">
+              <label className="check">
+                <input type="radio" name="document-mode" checked={!choosing} onChange={() => changeMode("automatic")} />
+                Use the automatic documents
+              </label>
+              <label className="check">
+                <input type="radio" name="document-mode" checked={choosing} onChange={() => changeMode("choose")} />
+                Choose the documents for this sale
+              </label>
+            </div>
+            {choosing ? (
+              <>
+                <ChooseSaleDocuments
+                  catalogue={catalogue}
+                  types={types}
+                  choices={choices}
+                  canIssue={canIssue}
+                  failure={docFailure}
+                  onChange={changeChoice}
+                />
+                {docFailure?.general.map((message) => (
+                  <p key={message} className="field-error" role="alert">{message}</p>
+                ))}
+              </>
+            ) : <p className="muted small">{AUTOMATIC_NOTE}</p>}
+          </fieldset>
+        ) : null}
         <ul className="hints">
-          {paidInFull ? <li>Paid in full: the documents due on full payment are created straight away.</li> : null}
+          {choosing ? <li>{CHOOSE_HINT}</li> : null}
+          {!choosing && paidInFull ? <li>Paid in full: the documents due on full payment are created straight away.</li> : null}
+          {docsProblem ? <li>{docsProblem}</li> : null}
         </ul>
         <div className="form-actions">
-          <button type="submit" className="btn btn-primary" disabled={!valid || busy}>{busy ? "Adding…" : "Add sale"}</button>
+          <button type="submit" className="btn btn-primary" disabled={!valid || Boolean(docsProblem) || busy}>{busy ? "Adding…" : "Add sale"}</button>
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
         </div>
       </form>
