@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 
 from api.permissions import can
 from api.serializers.reference import BuyerSerializer
@@ -21,6 +22,57 @@ def _money(value):
 
 def _day(value):
     return value.isoformat() if value else None
+
+
+class SaleDeskObligationSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    type_name = serializers.CharField()
+    status = serializers.ChoiceField(choices=Obligation.Status.choices)
+    owner_name = serializers.CharField(allow_null=True)
+    started_on = serializers.DateField()
+    due_date = serializers.DateField(allow_null=True)
+    completed_on = serializers.DateField(allow_null=True)
+    is_open = serializers.BooleanField()
+
+
+class SaleDeskPaymentSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    kind = serializers.ChoiceField(choices=Payment.Kind.choices)
+    amount = serializers.CharField()
+    paid_on = serializers.DateField()
+    reference = serializers.CharField()
+    note = serializers.CharField()
+    recorded_by_name = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    reverses = serializers.IntegerField(allow_null=True)
+    is_reversed = serializers.BooleanField()
+    reversible = serializers.BooleanField()
+
+
+class SaleDeskHistorySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    action = serializers.ChoiceField(choices=SaleEvent.Action.choices)
+    action_label = serializers.CharField()
+    actor_name = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()
+    note = serializers.CharField()
+    changes_display = inline_serializer(
+        name="SaleDeskHistoryChange",
+        fields={
+            "field": serializers.CharField(),
+            "from": serializers.JSONField(),
+            "to": serializers.JSONField(),
+        },
+        many=True,
+    )
+
+
+class SaleDeskCanSerializer(serializers.Serializer):
+    record_payment = serializers.BooleanField()
+    reverse_payment = serializers.BooleanField()
+    edit_buyer = serializers.BooleanField()
+    cancel = serializers.BooleanField()
+    reinstate = serializers.BooleanField()
 
 
 class SaleDeskListSerializer(serializers.ModelSerializer):
@@ -44,6 +96,7 @@ class SaleDeskListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(serializers.CharField())
     def get_balance_due(self, obj):
         return _money(max(obj.price - obj.amount_paid, Decimal("0")))
 
@@ -71,6 +124,7 @@ class SaleDeskDetailSerializer(SaleDeskListSerializer):
         fields = SaleDeskListSerializer.Meta.fields + ["buyer_detail", "obligations", "payments", "history", "can"]
         read_only_fields = fields
 
+    @extend_schema_field(SaleDeskObligationSerializer(many=True))
     def get_obligations(self, obj):
         active = obj.status == Sale.Status.ACTIVE
         rows = (Obligation.objects.filter(sale=obj).select_related("obligation_type", "owner")
@@ -81,6 +135,7 @@ class SaleDeskDetailSerializer(SaleDeskListSerializer):
             "is_open": active and o.status in Obligation.OPEN_STATUSES,
         } for o in rows]
 
+    @extend_schema_field(SaleDeskPaymentSerializer(many=True))
     def get_payments(self, obj):
         active = obj.status == Sale.Status.ACTIVE
         payments = list(Payment.objects.filter(sale=obj).select_related("recorded_by").order_by("created_at", "id"))
@@ -93,6 +148,7 @@ class SaleDeskDetailSerializer(SaleDeskListSerializer):
             "reversible": active and p.kind != Payment.Kind.REVERSAL and p.amount > 0 and p.pk not in reversed_ids,
         } for p in payments]
 
+    @extend_schema_field(SaleDeskHistorySerializer(many=True))
     def get_history(self, obj):
         events = SaleEvent.objects.filter(sale=obj).select_related("actor").order_by("created_at", "id")
         return [{
@@ -101,6 +157,7 @@ class SaleDeskDetailSerializer(SaleDeskListSerializer):
             "changes_display": [{"field": field, "from": pair[0], "to": pair[1]} for field, pair in e.changes.items()],
         } for e in events]
 
+    @extend_schema_field(SaleDeskCanSerializer())
     def get_can(self, obj):
         """What the screen may offer this person for this sale: role AND the sale's state."""
         user = self.context["request"].user
@@ -184,14 +241,16 @@ class SaleCreateSerializer(serializers.Serializer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        company_id = self.context["request"].user.company_id
-        # Another company's estate or buyer simply does not exist as a valid choice.
-        self.fields["estate"].queryset = Estate.objects.filter(company_id=company_id)
-        self.fields["buyer"].queryset = Buyer.objects.filter(company_id=company_id)
-        # Likewise another company's document type does not exist as a choice. An INACTIVE type of the caller's
-        # own company is a valid choice here and is refused (409) by add_document.
-        self.fields["documents"].child.fields["document_type"].queryset = DocumentType.objects.filter(
-            company_id=company_id)
+        request = self.context.get("request")
+        if request is not None and request.user.is_authenticated:
+            company_id = request.user.company_id
+            # Another company's estate or buyer simply does not exist as a valid choice.
+            self.fields["estate"].queryset = Estate.objects.filter(company_id=company_id)
+            self.fields["buyer"].queryset = Buyer.objects.filter(company_id=company_id)
+            # Likewise another company's document type does not exist as a choice. An INACTIVE type of the caller's
+            # own company is a valid choice here and is refused (409) by add_document.
+            self.fields["documents"].child.fields["document_type"].queryset = DocumentType.objects.filter(
+                company_id=company_id)
 
 
 class PaymentCreateSerializer(serializers.Serializer):

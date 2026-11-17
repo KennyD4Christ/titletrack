@@ -1,5 +1,6 @@
 from django.utils import timezone
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from api.permissions import can
 from tracker.models import DocumentType, Obligation, Sale, SaleDocument
@@ -36,6 +37,12 @@ def display_status(document):
     return "in_progress"
 
 
+class SaleDocumentCanSerializer(serializers.Serializer):
+    issue = serializers.BooleanField()
+    mark_not_applicable = serializers.BooleanField()
+    correct_issuance = serializers.BooleanField()
+
+
 class SaleDocumentSerializer(serializers.ModelSerializer):
     """One sale document. Needs a queryset that selects the related sale, buyer, plot, estate, catalogue entry,
     obligation (with its owner) and the people named, so a list costs a fixed number of queries."""
@@ -65,32 +72,41 @@ class SaleDocumentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(serializers.ChoiceField(choices=DISPLAY_STATUSES))
     def get_display_status(self, obj):
         return display_status(obj)
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_overdue(self, obj):
         ob = obj.obligation
         return bool(obj.state == OWED and obj.sale.status == Sale.Status.ACTIVE and ob is not None
                     and ob.status in Obligation.OPEN_STATUSES and ob.due_date and ob.due_date < timezone.localdate())
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_obligation_status(self, obj):
         return obj.obligation.status if obj.obligation else None
 
+    @extend_schema_field(serializers.DateField(allow_null=True))
     def get_due_date(self, obj):
         return _day(obj.obligation.due_date) if obj.obligation else None
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_owner_name(self, obj):
         return _name(obj.obligation.owner) if obj.obligation else None
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_issued_by_name(self, obj):
         return _name(obj.issued_by)
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_not_applicable_by_name(self, obj):
         return _name(obj.not_applicable_by)
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_added_by_name(self, obj):
         return _name(obj.added_by)
 
+    @extend_schema_field(SaleDocumentCanSerializer())
     def get_can(self, obj):
         """What the screen may offer this person for this document: role AND the document's and sale's state.
         Separate from the sale's own `can`, which is not changed."""

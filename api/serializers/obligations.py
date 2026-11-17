@@ -1,5 +1,6 @@
 from django.utils import timezone
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field, inline_serializer
 
 from api.serializers.reference import BuyerSerializer, SaleSerializer
 from api.permissions import can_edit_obligation
@@ -52,27 +53,40 @@ class ObligationListSerializer(ClockMixin, serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_owner_name(self, obj):
         return _person_name(obj.owner)
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_cancelled(self, obj):
         return computed.is_cancelled(obj)
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_open(self, obj):
         return computed.is_open(obj)
 
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_days_outstanding(self, obj):
         return computed.days_outstanding(obj, self._clock()[0])
 
+    @extend_schema_field(serializers.IntegerField())
     def get_days_overdue(self, obj):
         return computed.days_overdue(obj, self._clock()[0])
 
+    @extend_schema_field(
+        serializers.ChoiceField(
+            choices=["green", "amber", "red"],
+            allow_null=True,
+        )
+    )
     def get_staleness(self, obj):
         return computed.staleness(obj, self._clock()[1])
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_incomplete(self, obj):
         return computed.is_incomplete(obj)
 
+    @extend_schema_field(serializers.BooleanField())
     def get_can_edit(self, obj):
         request = self.context.get("request")
         user = getattr(request, "user", None)
@@ -93,6 +107,17 @@ class ObligationDetailSerializer(ObligationListSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(
+        inline_serializer(
+            name="ObligationTimeline",
+            fields={
+                "sla_days": serializers.IntegerField(),
+                "expected_days": serializers.IntegerField(allow_null=True),
+                "actual_days": serializers.IntegerField(allow_null=True),
+                "delay_days": serializers.IntegerField(),
+            },
+        )
+    )
     def get_timeline(self, obj):
         """Data for the 'Why is this overdue?' panel."""
         today = self._clock()[0]
@@ -175,8 +200,10 @@ class ObligationTypeSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
-        if request is not None:
-            self.fields["default_department"].queryset = Department.objects.filter(company_id=request.user.company_id)
+        if request is not None and request.user.is_authenticated:
+            self.fields["default_department"].queryset = Department.objects.filter(
+                company_id=request.user.company_id
+            )
 
     def validate_sla_days(self, value):
         if not 1 <= value <= 3650:

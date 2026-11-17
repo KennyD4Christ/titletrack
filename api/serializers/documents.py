@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from tracker.document_services import (
     CATEGORY_LIMIT, DESCRIPTION_LIMIT, NAME_LIMIT, SLA_MAX, SLA_MIN, SORT_ORDER_MAX,
@@ -25,18 +26,22 @@ class DocumentTypeSerializer(serializers.Serializer):
         current = getattr(obj, "current_types", None)
         return current[0] if current else None
 
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_work_type(self, obj):
         current = self._current(obj)
         return current.pk if current else None
 
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_sla_days(self, obj):
         current = self._current(obj)
         return current.sla_days if current else None
 
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
     def get_default_department(self, obj):
         current = self._current(obj)
         return current.default_department_id if current else None
 
+    @extend_schema_field(serializers.BooleanField())
     def get_drives_legacy_generation(self, obj):
         """True for an entry that came from an existing automatic type: that type still creates obligations
         on legacy sales and is still offered for spreadsheet mapping (managed in the old settings)."""

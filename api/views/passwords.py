@@ -9,6 +9,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, inline_serializer
 
 from api.permissions import IsCompanyUser
 from api.serializers.passwords import ChangePasswordSerializer, LinkPasswordSerializer
@@ -30,6 +32,25 @@ class _LinkPasswordView(APIView):
     purpose = None
     done = ""
 
+    @extend_schema(
+        request=LinkPasswordSerializer,
+        responses={
+            200: inline_serializer(
+                name="PasswordLinkSuccessResponse",
+                fields={"detail": serializers.CharField()},
+            ),
+            400: inline_serializer(
+                name="PasswordLinkErrorResponse",
+                fields={
+                    "detail": serializers.CharField(required=False),
+                    "password": serializers.ListField(
+                        child=serializers.CharField(),
+                        required=False,
+                    ),
+                },
+            ),
+        },
+    )
     def post(self, request):
         serializer = LinkPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -60,6 +81,28 @@ class ChangePasswordView(APIView):
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "password_change"
 
+    @extend_schema(
+        request=ChangePasswordSerializer,
+        responses={
+            200: inline_serializer(
+                name="ChangePasswordSuccessResponse",
+                fields={"detail": serializers.CharField()},
+            ),
+            400: inline_serializer(
+                name="ChangePasswordErrorResponse",
+                fields={
+                    "current_password": serializers.ListField(
+                        child=serializers.CharField(),
+                        required=False,
+                    ),
+                    "new_password": serializers.ListField(
+                        child=serializers.CharField(),
+                        required=False,
+                    ),
+                },
+            ),
+        },
+    )
     def post(self, request):
         serializer = ChangePasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

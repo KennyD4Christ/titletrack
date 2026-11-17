@@ -1,6 +1,8 @@
 from django.contrib.auth import authenticate, login, logout
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -16,6 +18,14 @@ class CsrfView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        responses={
+            200: inline_serializer(
+                name="CsrfResponse",
+                fields={"detail": serializers.CharField()},
+            )
+        }
+    )
     def get(self, request):
         return Response({"detail": "CSRF cookie set."})
 
@@ -25,6 +35,16 @@ class LoginView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=LoginSerializer,
+        responses={
+            200: MeSerializer,
+            400: inline_serializer(
+                name="LoginErrorResponse",
+                fields={"detail": serializers.CharField()},
+            ),
+        },
+    )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -43,6 +63,10 @@ class LoginView(APIView):
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=None,
+        responses={204: None},
+    )
     def post(self, request):
         logout(request)
         return Response(status=204)
@@ -51,5 +75,8 @@ class LogoutView(APIView):
 class MeView(APIView):
     permission_classes = [IsCompanyUser]
 
+    @extend_schema(
+        responses={200: MeSerializer},
+    )
     def get(self, request):
         return Response(MeSerializer(request.user).data)
