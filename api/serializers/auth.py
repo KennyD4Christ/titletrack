@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from tracker.models import Company, Department, User
 
@@ -29,5 +30,6 @@ class MeSerializer(serializers.ModelSerializer):
         model = User
         fields = ["id", "username", "full_name", "role", "company", "department"]
 
+    @extend_schema_field(serializers.CharField())
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username

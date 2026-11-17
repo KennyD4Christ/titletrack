@@ -3,6 +3,9 @@ class CompanyScopedMixin:
     company's object simply does not exist for this user (404, not 403)."""
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return super().get_queryset().none()
+
         return super().get_queryset().filter(company_id=self.request.user.company_id)
 
     def perform_create(self, serializer):

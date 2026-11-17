@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from tracker import staff_services
 from tracker.models import AccountEvent, Department, User
@@ -21,19 +22,24 @@ class StaffSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(serializers.CharField())
     def get_full_name(self, obj):
         return obj.get_full_name() or obj.username
 
+    @extend_schema_field(serializers.IntegerField())
     def get_open_obligations(self, obj):
         count = getattr(obj, "open_obligations", None)          # annotated on lists; computed for a single object
         return count if count is not None else staff_services.open_obligation_count(obj)
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_protected(self, obj):
         return bool(obj.is_staff or obj.is_superuser)
 
+    @extend_schema_field(serializers.BooleanField())
     def get_can_manage(self, obj):
         return staff_services.may_manage(self.context["request"].user, obj)
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_self(self, obj):
         return obj.pk == self.context["request"].user.pk
 

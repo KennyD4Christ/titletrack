@@ -4,6 +4,7 @@ from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
+from drf_spectacular.utils import extend_schema
 
 from api.mixins import CompanyScopedMixin
 from api.permissions import can
@@ -126,6 +127,10 @@ class SalesDeskViewSet(CompanyScopedMixin, mixins.ListModelMixin, mixins.Retriev
 
     # ---- writes ----
 
+    @extend_schema(
+        request=SaleCreateSerializer,
+        responses={201: SaleDeskDetailSerializer},
+    )
     def create(self, request, *args, **kwargs):
         raw_documents = request.data.get("documents") if hasattr(request.data, "get") else None
         _require_document_permissions(request.user, raw_documents)
