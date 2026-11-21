@@ -1,3 +1,4 @@
+import contextvars
 from decimal import Decimal
 
 from django.contrib.auth.models import AbstractUser
@@ -5,6 +6,8 @@ from django.db import models
 from django.db.models import Q
 from django.db.models.functions import Lower
 from django.utils import timezone
+
+from .canonical import MAX_CASEFOLD_GROWTH, canonical_key, fields_with_derived_key, sync_key_on_save
 
 
 class Company(models.Model):
@@ -52,14 +55,101 @@ class User(AbstractUser):
         ]
 
 
+# True only while CanonicalKeyQuerySet.bulk_update is running. Django's own bulk_update writes through
+# QuerySet.update() with one CASE expression per column, including the key column; our bulk_update has already
+# derived those keys from their sources, so update() lets that one internal call through. A context variable
+# (not an attribute on the queryset) because Django runs that call on a clone of the queryset.
+_bulk_update_in_progress = contextvars.ContextVar("canonical_key_bulk_update", default=False)
+
+
+class CanonicalKeyQuerySet(models.QuerySet):
+    """Keeps a stored canonical key in step with the field it is derived from, on every write path that does not
+    go through Model.save() (which does the same for itself): bulk_create, bulk_update and update().
+
+    A subclass names `source_field` and `key_field`. The key is DERIVED: it is always computed here from the
+    source, and any attempt to write it independently is refused, so a stale or hand-written key cannot get in.
+
+    Deliberately NOT covered, because they bypass the ORM's queryset methods altogether: raw SQL, QuerySet._update
+    and Model.save_base. The database still refuses a blank key and a duplicate key, so the worst such a path can
+    do is be refused. Migrations and maintenance code that must write a key use Model._base_manager."""
+
+    source_field = None
+    key_field = None
+
+    def _source_value(self, value):
+        if hasattr(value, "resolve_expression"):
+            # An expression (F(), Concat() and so on) cannot be reduced to a key in Python.
+            raise TypeError(
+                f"{self.model.__name__}.{self.source_field} must be written as a plain value, not an expression, "
+                f"so that {self.key_field} can be kept in step.")
+        return value
+
+    def bulk_create(self, objs, *args, **kwargs):
+        objs = list(objs)
+        for obj in objs:
+            setattr(obj, self.key_field, canonical_key(self._source_value(getattr(obj, self.source_field))))
+        if kwargs.get("update_fields") is not None:        # update_conflicts: the columns rewritten on a conflict
+            kwargs["update_fields"] = fields_with_derived_key(kwargs["update_fields"], self.source_field, self.key_field)
+        return super().bulk_create(objs, *args, **kwargs)
+
+    def bulk_update(self, objs, fields, *args, **kwargs):
+        fields = fields_with_derived_key(fields, self.source_field, self.key_field)   # refuses the key on its own
+        if self.source_field in fields:
+            objs = list(objs)
+            for obj in objs:
+                setattr(obj, self.key_field, canonical_key(self._source_value(getattr(obj, self.source_field))))
+        token = _bulk_update_in_progress.set(True)
+        try:
+            return super().bulk_update(objs, fields, *args, **kwargs)
+        finally:
+            _bulk_update_in_progress.reset(token)
+
+    def update(self, **kwargs):
+        if not _bulk_update_in_progress.get():
+            if self.key_field in kwargs:
+                raise ValueError(
+                    f"{self.model.__name__}.{self.key_field} is derived from {self.source_field} and cannot be "
+                    f"written directly: update {self.source_field} instead, and {self.key_field} will follow it.")
+            if self.source_field in kwargs:
+                kwargs[self.key_field] = canonical_key(self._source_value(kwargs[self.source_field]))
+        return super().update(**kwargs)
+
+
+class EstateQuerySet(CanonicalKeyQuerySet):
+    source_field = "name"
+    key_field = "name_key"
+
+
+class PlotQuerySet(CanonicalKeyQuerySet):
+    source_field = "plot_number"
+    key_field = "plot_key"
+
+
 class Estate(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="estates")
     name = models.CharField(max_length=200)
     location = models.CharField(max_length=200, blank=True)
     import_batch = models.ForeignKey("ImportBatch", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    # The canonical form of `name` (see tracker/canonical.py). Maintained by save() and the queryset above;
+    # never set by hand. The database enforces it as unique per company, so "Palm Grove" and "palm  grove"
+    # cannot both exist, whichever code path created them. db_default keeps older code able to insert while a
+    # deployment is part-way through (migration 0014 then refuses a blank key, so a row that skipped save() is
+    # caught rather than stored).
+    name_key = models.CharField(
+        max_length=200 * MAX_CASEFOLD_GROWTH, default="", db_default="", blank=True, editable=False)
+
+    objects = EstateQuerySet.as_manager()
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["company", "name"], name="uniq_estate_per_company")]
+        constraints = [
+            models.UniqueConstraint(fields=["company", "name"], name="uniq_estate_per_company"),
+            models.UniqueConstraint(fields=["company", "name_key"], name="uniq_estate_key_per_company"),
+            models.CheckConstraint(condition=~Q(name_key=""), name="estate_key_not_blank"),
+        ]
+
+    def save(self, *args, **kwargs):
+        kwargs = sync_key_on_save(self, "name", "name_key", args, kwargs)
+        super().save(**kwargs)
 
     def __str__(self):
         return self.name
@@ -70,9 +160,22 @@ class Plot(models.Model):
     estate = models.ForeignKey(Estate, on_delete=models.CASCADE, related_name="plots")
     plot_number = models.CharField(max_length=50)
     import_batch = models.ForeignKey("ImportBatch", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    # The canonical form of `plot_number`; see Estate.name_key. Unique per estate.
+    plot_key = models.CharField(
+        max_length=50 * MAX_CASEFOLD_GROWTH, default="", db_default="", blank=True, editable=False)
+
+    objects = PlotQuerySet.as_manager()
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["estate", "plot_number"], name="uniq_plot_per_estate")]
+        constraints = [
+            models.UniqueConstraint(fields=["estate", "plot_number"], name="uniq_plot_per_estate"),
+            models.UniqueConstraint(fields=["estate", "plot_key"], name="uniq_plot_key_per_estate"),
+            models.CheckConstraint(condition=~Q(plot_key=""), name="plot_key_not_blank"),
+        ]
+
+    def save(self, *args, **kwargs):
+        kwargs = sync_key_on_save(self, "plot_number", "plot_key", args, kwargs)
+        super().save(**kwargs)
 
     def __str__(self):
         return f"{self.estate.name} / {self.plot_number}"
