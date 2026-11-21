@@ -543,3 +543,45 @@ class AccountEvent(models.Model):
 
     def delete(self, *args, **kwargs):
         raise ValueError("Account history cannot be deleted.")
+
+
+class InventoryEvent(models.Model):
+    """Inventory audit history: who registered, renamed, edited or removed which estate or plot, and when.
+    Rows are append-only: the app never edits or deletes them.
+
+    The estate and plot links are SET_NULL, and the name and label are copied into the row, so the history
+    survives the removal of a plot registered by mistake and the undo of an import that created the record.
+    Estates and plots created by a sale or a spreadsheet import are recorded by those workflows (the sale
+    history, the import batch), not here."""
+
+    class Action(models.TextChoices):
+        ESTATE_CREATED = "estate_created", "Estate created"
+        ESTATE_EDITED = "estate_edited", "Estate edited"
+        PLOT_REGISTERED = "plot_registered", "Plot registered"
+        PLOTS_BULK_REGISTERED = "plots_bulk_registered", "Plots registered in bulk"
+        PLOT_RENAMED = "plot_renamed", "Plot renamed"
+        PLOT_REMOVED = "plot_removed", "Plot removed"
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="inventory_events")
+    estate = models.ForeignKey(Estate, null=True, blank=True, on_delete=models.SET_NULL, related_name="inventory_events")
+    plot = models.ForeignKey(Plot, null=True, blank=True, on_delete=models.SET_NULL, related_name="inventory_events")
+    estate_name = models.CharField(max_length=200, blank=True)      # the estate's name when the event happened
+    plot_label = models.CharField(max_length=50, blank=True)        # the plot number when the event happened
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    action = models.CharField(max_length=30, choices=Action.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+    # {"field": [before, after]} for an edit; for a bulk registration the labels and the two fingerprints.
+    changes = models.JSONField(default=dict, blank=True)
+    note = models.TextField(blank=True)                              # the reason, where one is required
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [models.Index(fields=["company", "estate"], name="invevent_company_estate_idx")]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValueError("Inventory history cannot be changed.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("Inventory history cannot be deleted.")
