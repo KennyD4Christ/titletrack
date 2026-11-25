@@ -70,6 +70,10 @@ class FrontendFixtureContractTests(DeskBase):
         self.assertEqual(set(again.data), detail_keys | {"obligations_created"})
 
     def test_the_occupied_plot_response_has_the_fields_the_form_reads(self):
+        plot = self.s2.plot
+        plot.inventory_registered = True
+        plot.save(update_fields=["inventory_registered"])
+
         payload = self.new_sale_payload(estate=self.estate.pk, estate_name="", plot_number="A-2", buyer_name="Someone Else")
         r = self.post(self.manager, "sales-desk-list", payload=payload)
         self.assertEqual(r.status_code, 409)

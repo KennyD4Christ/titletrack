@@ -46,6 +46,10 @@
       "manager",
       "md"
     ],
+    "manage_inventory": [
+      "manager",
+      "md"
+    ],
     "manage_sale_documents": [
       "manager",
       "md"
@@ -99,6 +103,13 @@
       "staff"
     ],
     "view_obligations": [
+      "manager",
+      "md",
+      "sales",
+      "staff",
+      "viewer"
+    ],
+    "view_plot_board": [
       "manager",
       "md",
       "sales",

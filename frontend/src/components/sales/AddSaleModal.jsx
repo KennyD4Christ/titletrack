@@ -9,18 +9,19 @@ import { listAllActiveDocumentTypes } from "../../api/pagedLists.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { can } from "../../utils/permissions.js";
 import ChooseSaleDocuments from "./ChooseSaleDocuments.jsx";
+import SalePlotFields from "./SalePlotFields.jsx";
 import {
   AUTOMATIC_NOTE, CHOOSE_HINT, buildDocuments, documentFailure, documentsProblem, sortedActiveTypes,
   startingChoice, withoutRow,
 } from "../../utils/newSaleDocuments.js";
 
-const NEW = "__new__";
-
-/** Add a sale. Everything is checked again by the server, which refuses an occupied plot by name. */
-export default function AddSaleModal({ estates = [], onClose, onCreated }) {
-  const [estateChoice, setEstateChoice] = useState("");
-  const [estateName, setEstateName] = useState("");
-  const [plot, setPlot] = useState("");
+/** Add a sale. Everything is checked again by the server, which refuses an occupied plot by name.
+ *  `initial` ({estateId, plotNumber}) only fills the form in, for a sale started from a plot on the estate page;
+ *  the estate and the plot number can still be changed, and without it the form starts empty as before. */
+export default function AddSaleModal({ initial = null, onClose, onCreated }) {
+  const [estateChoice, setEstateChoice] = useState(initial?.estateId ? String(initial.estateId) : "");
+  const [plot, setPlot] = useState(initial?.plotNumber ?? "");
+  const [plotSelectionValid, setPlotSelectionValid] = useState(false);
   const [buyerMode, setBuyerMode] = useState("new");
   const [buyer, setBuyer] = useState(null);
   const [term, setTerm] = useState("");
@@ -75,13 +76,15 @@ export default function AddSaleModal({ estates = [], onClose, onCreated }) {
     enabled: buyerMode === "existing" && !buyer && search.length >= 2,
   });
 
-  const estateOk = estateChoice === NEW ? estateName.trim() !== "" : estateChoice !== "";
   const buyerOk = buyerMode === "existing" ? Boolean(buyer) : form.buyer_name.trim() !== "";
-  const valid = estateOk && buyerOk && plot.trim() !== "" && form.price.trim() !== "" && form.sale_date !== "";
+  const valid = plotSelectionValid && buyerOk && form.price.trim() !== "" && form.sale_date !== "";
 
-  const payload = { plot_number: plot.trim(), price: form.price.trim(), sale_date: form.sale_date };
-  if (estateChoice === NEW) payload.estate_name = estateName.trim();
-  else if (estateChoice) payload.estate = Number(estateChoice);
+  const payload = {
+    estate: Number(estateChoice),
+    plot_number: plot.trim(),
+    price: form.price.trim(),
+    sale_date: form.sale_date,
+  };
   if (buyerMode === "existing") {
     if (buyer) payload.buyer = buyer.id;
   } else {
@@ -132,26 +135,14 @@ export default function AddSaleModal({ estates = [], onClose, onCreated }) {
           </div>
         ) : null}
         <div className="form-grid">
-          <label>
-            Estate
-            <select value={estateChoice} onChange={(e) => setEstateChoice(e.target.value)}>
-              <option value="">Choose an estate…</option>
-              {estates.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-              <option value={NEW}>New estate…</option>
-            </select>
-            {fieldError("estate")}
-          </label>
-          {estateChoice === NEW ? (
-            <label>
-              New estate name
-              <input value={estateName} maxLength={200} onChange={(e) => setEstateName(e.target.value)} />
-            </label>
-          ) : null}
-          <label>
-            Plot number
-            <input value={plot} maxLength={50} onChange={(e) => setPlot(e.target.value)} />
-            {fieldError("plot_number")}
-          </label>
+          <SalePlotFields
+            estateChoice={estateChoice}
+            setEstateChoice={setEstateChoice}
+            plot={plot}
+            setPlot={setPlot}
+            fieldError={fieldError}
+            onSelectionValidityChange={setPlotSelectionValid}
+          />
 
           <fieldset className="map-group wide">
             <legend>Buyer</legend>

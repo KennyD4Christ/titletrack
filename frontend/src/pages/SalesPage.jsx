@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { listSales } from "../api/sales.js";
 import { useReferenceData } from "../hooks/useReferenceData.js";
+import { useRefreshAfterSave } from "../hooks/useRefreshAfterSave.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { can } from "../utils/permissions.js";
 import { formatDate } from "../utils/format.js";
@@ -65,6 +66,7 @@ export default function SalesPage() {
   const reference = useReferenceData();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const refresh = useRefreshAfterSave();
   const [adding, setAdding] = useState(false);
 
   const query = useQuery({
@@ -109,9 +111,13 @@ export default function SalesPage() {
       <section className="card">{body}</section>
       {adding ? (
         <AddSaleModal
-          estates={reference.estates}
           onClose={() => setAdding(false)}
-          onCreated={(sale) => navigate(`/sales/${sale.id}`, { state: { notice: "Sale added." } })}
+          onCreated={(sale) => {
+            // This page navigates away, so nothing else would mark the plot boards and the estate lists stale:
+            // the sale may have taken a plot, or created an estate and plot.
+            refresh();
+            navigate(`/sales/${sale.id}`, { state: { notice: "Sale added." } });
+          }}
         />
       ) : null}
     </>

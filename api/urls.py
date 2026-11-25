@@ -6,6 +6,8 @@ from api.views.dashboard import DashboardViewSet, MyQueueView
 from api.views.documents import DocumentTypeViewSet
 from api.views.sale_documents import SaleDocumentViewSet
 from api.views.imports import ImportBatchViewSet
+from api.views.inventory import InventoryEstateViewSet, InventoryPlotViewSet
+from api.views.plot_board import PlotBoardView
 from api.views.obligations import ObligationTypeViewSet, ObligationViewSet
 from api.views.reference import (
     BuyerViewSet, DepartmentViewSet, EstateViewSet, PlotViewSet, SaleViewSet, UserViewSet,
@@ -29,6 +31,9 @@ router.register("sale-documents", SaleDocumentViewSet, basename="sale-document")
 router.register("obligations", ObligationViewSet, basename="obligation")
 router.register("imports", ImportBatchViewSet, basename="import")
 router.register("dashboard", DashboardViewSet, basename="dashboard")
+# Estate and plot inventory writes (MD and Manager). /api/estates/ and /api/plots/ above stay read-only.
+router.register("inventory/estates", InventoryEstateViewSet, basename="inventory-estate")
+router.register("inventory/plots", InventoryPlotViewSet, basename="inventory-plot")
 
 urlpatterns = [
     path("auth/csrf/", CsrfView.as_view(), name="auth-csrf"),
@@ -39,5 +44,6 @@ urlpatterns = [
     path("auth/reset-password/", ResetPasswordView.as_view(), name="auth-reset-password"),
     path("auth/change-password/", ChangePasswordView.as_view(), name="auth-change-password"),
     path("me/queue/", MyQueueView.as_view(), name="my-queue"),
+    path("plot-board/", PlotBoardView.as_view(), name="plot-board"),
     path("", include(router.urls)),
 ]

@@ -109,3 +109,8 @@ EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=False)
 EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
 EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=10)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="TitleTrack <no-reply@localhost>")
+
+# --- Estate and plot inventory ---
+# The most plots that can be REGISTERED in one estate (single or bulk). Sales and spreadsheet imports that create
+# plots are not limited by it. It keeps the plot board's payload bounded.
+INVENTORY_MAX_PLOTS_PER_ESTATE = env.int("INVENTORY_MAX_PLOTS_PER_ESTATE", default=3000)

@@ -28,6 +28,11 @@ MATRIX = {
     "manage_sale_documents": {MD, MANAGER},
     "issue_document": {MD, MANAGER},
     "manage_sales": {MD, MANAGER},
+    # Estate and plot inventory: separate actions on purpose, so either can be widened or narrowed by editing one
+    # line. The board shows every role plot numbers and available/sold; what more a role sees (payment state, the
+    # sale to open) is decided by view_sales, not here.
+    "view_plot_board": ALL_ROLES,
+    "manage_inventory": {MD, MANAGER},
     # Staff accounts: which roles each may manage is decided in tracker/staff_services.py (ROLE_MANAGES).
     "manage_users": {MD, MANAGER},
     # Sales desk: separate actions on purpose, so a Finance role can be added later by editing one line each.

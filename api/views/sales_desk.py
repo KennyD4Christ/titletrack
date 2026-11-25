@@ -139,7 +139,9 @@ class SalesDeskViewSet(CompanyScopedMixin, mixins.ListModelMixin, mixins.Retriev
                 request.user.company, request.user, plot_number=data["plot_number"], price=data["price"],
                 sale_date=data["sale_date"], estate=data.get("estate"), estate_name=data.get("estate_name", ""),
                 buyer=data.get("buyer"), buyer_name=data.get("buyer_name", ""), phone=data.get("phone", ""),
-                email=data.get("email", ""), amount_paid=data.get("amount_paid", "0"), paid_on=data.get("paid_on"))
+                email=data.get("email", ""), amount_paid=data.get("amount_paid", "0"), paid_on=data.get("paid_on"),
+                require_registered_plot=True,
+            )
         except (ValueError, services.SaleStateError) as exc:
             return _refusal(exc)
         return Response(self._detail(sale.pk), status=201)
@@ -153,7 +155,9 @@ class SalesDeskViewSet(CompanyScopedMixin, mixins.ListModelMixin, mixins.Retriev
                 price=data["price"], sale_date=data["sale_date"], estate=data.get("estate"),
                 estate_name=data.get("estate_name", ""), buyer=data.get("buyer"),
                 buyer_name=data.get("buyer_name", ""), phone=data.get("phone", ""), email=data.get("email", ""),
-                amount_paid=data.get("amount_paid", "0"), paid_on=data.get("paid_on"))
+                amount_paid=data.get("amount_paid", "0"), paid_on=data.get("paid_on"),
+                require_registered_plot=True,
+            )
         except sale_documents.SaleDocumentsError as exc:
             return _documents_refusal(exc)
         except (ValueError, services.SaleStateError) as exc:

@@ -8,7 +8,7 @@ from django.urls import path, reverse
 
 from . import onboarding_services as onboarding
 from .models import (
-    AccountEvent, Buyer, Company, Department, Estate, Obligation, ObligationEvent,
+    AccountEvent, Buyer, Company, Department, Estate, InventoryEvent, Obligation, ObligationEvent,
     ObligationType, Payment, Plot, Sale, SaleEvent, User,
 )
 
@@ -187,13 +187,17 @@ class DepartmentAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
 
 
 @admin.register(Estate)
-class EstateAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
+class EstateAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAdmin):
+    """Read-only: estates are created and changed on the Estates screen (tracker/inventory_services.py), which
+    checks the rules and writes the audit trail. An admin edit would skip both, and deleting an estate here would
+    delete its plots with it."""
     list_display = ["name", "location", "company"]
     search_fields = ["name"]
 
 
 @admin.register(Plot)
-class PlotAdmin(CompanyScopedAdminMixin, admin.ModelAdmin):
+class PlotAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAdmin):
+    """Read-only, for the same reasons as EstateAdmin."""
     list_display = ["plot_number", "estate", "company"]
     search_fields = ["plot_number"]
     list_filter = ["estate"]
@@ -232,6 +236,12 @@ class PaymentAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAdmin
 @admin.register(SaleEvent)
 class SaleEventAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAdmin):
     list_display = ["sale", "action", "actor", "created_at"]
+    list_filter = ["action"]
+
+
+@admin.register(InventoryEvent)
+class InventoryEventAdmin(ReadOnlyAdminMixin, CompanyScopedAdminMixin, admin.ModelAdmin):
+    list_display = ["action", "estate_name", "plot_label", "actor", "created_at"]
     list_filter = ["action"]
 
 

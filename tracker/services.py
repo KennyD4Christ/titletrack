@@ -13,6 +13,7 @@ from .importing import clean_amount, clean_date
 from .models import (
     Buyer, Estate, Obligation, ObligationEvent, ObligationType, Payment, Plot, Sale, SaleDocument, SaleEvent,
 )
+from .canonical import canonical_key
 
 
 class SaleStateError(Exception):
@@ -27,6 +28,15 @@ class PlotOccupied(SaleStateError):
         super().__init__(
             f"Plot {sale.plot.plot_number} in {sale.plot.estate.name} already has an active sale "
             f"to {sale.buyer.full_name}.")
+
+
+class PlotChanged(SaleStateError):
+    """The plot was renamed or removed after the person (or the file) picked it, so the sale was NOT recorded.
+    Nothing was written; picking the plot again and retrying is the way forward. `.removed` says which."""
+
+    def __init__(self, message, *, removed):
+        self.removed = removed
+        super().__init__(message)
 
 
 TRACKED_FIELDS = (
@@ -137,9 +147,59 @@ def generate_obligations(sale):
     return created
 
 
+def _lock_plot_for_sale(company, plot, expected_plot_number=None):
+    """Lock the plot's row and re-read it, so a sale is only ever recorded against the plot that was picked.
+
+    The plot instance a caller holds can be out of date: an inventory manager may have renamed or removed the
+    plot since it was read. This takes the row lock FOR NO KEY UPDATE and returns the row as it is NOW (after any
+    wait, PostgreSQL re-reads the row, or finds it gone). That lock conflicts with the FOR UPDATE that
+    inventory_services.rename_plot and remove_plot take, so exactly one of the two goes first:
+      - the sale first: the rename or removal waits for the sale's transaction, then sees the sale (a rename then
+        needs a reason; a removal is refused);
+      - the rename or removal first: the sale finds the plot gone or renamed, and is refused here, before any
+        row is written.
+    A weaker lock than FOR UPDATE is enough, and it leaves other transactions free to insert rows that point at
+    the plot (the audit trail, for one).
+
+    The picked plot is whatever the caller says it is: `expected_plot_number` (what a person typed, or the file
+    row said) when given, and in any case the plot_key the passed instance was read with. Either differing from
+    the locked row means the plot was renamed. Raises PlotChanged (renamed or removed), PermissionDenied (another
+    company's plot), ValueError (an unsaved plot).
+
+    Lock order, for anyone adding to this: one plot row at a time, and nothing else is locked while waiting for
+    it, so a single sale cannot deadlock with a rename or a removal. A transaction that records several sales
+    (an import) takes its plot locks in row order, as it has always taken its unique-index waits in row order."""
+    if plot.pk is None:
+        raise ValueError("The plot must be saved before it can be sold.")
+    try:
+        locked = Plot.objects.select_for_update(no_key=True).get(pk=plot.pk)
+    except Plot.DoesNotExist:
+        raise PlotChanged(
+            f"Plot {plot.plot_number!r} no longer exists: it was removed while this sale was being prepared, so "
+            "nothing was recorded. Choose the plot again.", removed=True) from None
+    if locked.company_id != company.pk:
+        raise PermissionDenied("Plot belongs to another company.")
+    picked = expected_plot_number if expected_plot_number is not None else plot.plot_number
+    renamed = (
+        (expected_plot_number is not None and _key(expected_plot_number) != locked.plot_key)
+        or (bool(plot.plot_key) and plot.plot_key != locked.plot_key)
+        or (plot.estate_id is not None and plot.estate_id != locked.estate_id))
+    if renamed:
+        raise PlotChanged(
+            f"Plot {_clean_text(picked)!r} is now numbered {locked.plot_number!r}: it was renamed while this sale "
+            "was being prepared, so nothing was recorded. Check the plot number and try again.", removed=False)
+    return locked
+
+
 @transaction.atomic
 def create_sale(company, plot, buyer, price, sale_date, amount_paid=0, paid_on=None, actor=None, *,
-                documents_managed=False):
+                documents_managed=False, expected_plot_number=None):
+    """Record a sale of `plot`. The plot is locked and re-read first (see _lock_plot_for_sale), and the sale is
+    attached to that fresh row. Callers that hold an external statement of which plot was meant (a typed number,
+    a spreadsheet row) pass it as `expected_plot_number`; others are protected by the plot instance they pass.
+    Raises PlotChanged, PermissionDenied or ValueError as _lock_plot_for_sale describes; an occupied plot still
+    ends in the database's IntegrityError, as before (add_sale turns that into PlotOccupied)."""
+    plot = _lock_plot_for_sale(company, plot, expected_plot_number)
     amount_paid = Decimal(amount_paid)
     sale = Sale(
         company=company, plot=plot, buyer=buyer, price=Decimal(price),
@@ -314,11 +374,15 @@ def _get_or_create_plot(company, estate, number):
 
 @transaction.atomic
 def add_sale(company, actor, *, plot_number, price, sale_date, estate=None, estate_name="", buyer=None,
-             buyer_name="", phone="", email="", amount_paid=0, paid_on=None, documents_managed=False):
+             buyer_name="", phone="", email="", amount_paid=0, paid_on=None, documents_managed=False,
+             require_registered_plot=False):
     """Direct entry of a new sale. Everything is checked first and written in one transaction, so a refusal
     leaves nothing behind (no stray estate, plot or buyer). A new buyer is ALWAYS a new person: buyers are
     never merged on name alone. To reuse a person, pass `buyer`.
-    Raises ValueError (bad input), PlotOccupied (409-type), PermissionDenied (other company's records)."""
+    The plot is locked inside create_sale, and the number requested here is checked against it there, so a plot
+    renamed or removed while the sale was being prepared ends in PlotChanged, with nothing written.
+    Raises ValueError (bad input), PlotOccupied and PlotChanged (409-type), PermissionDenied (other company's
+    records)."""
     if actor.company_id != company.pk:
         raise PermissionDenied("You belong to another company.")
     price = _money(price, "Price")
@@ -338,6 +402,8 @@ def add_sale(company, actor, *, plot_number, price, sale_date, estate=None, esta
         paid_on = None
 
     plot_number = _required_text(plot_number, "Plot number", 50)
+    if require_registered_plot and estate is None:
+        raise ValueError("Select an existing estate.")
     if estate is not None:
         if estate.company_id != company.pk:
             raise PermissionDenied("Estate belongs to another company.")
@@ -361,7 +427,20 @@ def add_sale(company, actor, *, plot_number, price, sale_date, estate=None, esta
                 raise ValueError("Email address is too long.")
 
     estate = estate or _get_or_create_estate(company, estate_name)
-    plot = _get_or_create_plot(company, estate, plot_number)
+    if require_registered_plot:
+        plot = Plot.objects.filter(
+            company=company,
+            estate=estate,
+            plot_key=canonical_key(plot_number),
+            inventory_registered=True,
+        ).first()
+        if plot is None:
+            raise ValueError(
+                f"Plot {plot_number!r} is not registered in {estate.name}. "
+                "Register it in Estates before recording the sale."
+            )
+    else:
+        plot = _get_or_create_plot(company, estate, plot_number)
     current = _active_sale_on(plot)
     if current is not None:
         raise PlotOccupied(current)
@@ -370,7 +449,7 @@ def add_sale(company, actor, *, plot_number, price, sale_date, estate=None, esta
     try:
         with transaction.atomic():
             return create_sale(company, plot, buyer, price, sale_date, amount_paid, paid_on, actor=actor,
-                               documents_managed=documents_managed)
+                               documents_managed=documents_managed, expected_plot_number=plot_number)
     except IntegrityError:
         current = _active_sale_on(plot)                       # lost a race for the same plot
         if current is not None:

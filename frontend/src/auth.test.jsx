@@ -63,14 +63,14 @@ describe("menu and page access by role", () => {
     return within(nav).getAllByRole("link").map((a) => a.textContent);
   };
 
-  it.each(["md", "manager"])("%s gets Home, My Queue, Obligations, Sales, Import and Staff, then Document catalogue under Settings", async (role) => {
-    expect(await menu(role)).toEqual(["Home", "My Queue", "Obligations", "Sales", "Import", "Staff", "Document catalogue"]);
+  it.each(["md", "manager"])("%s gets Home, My Queue, Obligations, Sales, Estates, Import and Staff, then Document catalogue under Settings", async (role) => {
+    expect(await menu(role)).toEqual(["Home", "My Queue", "Obligations", "Sales", "Estates", "Import", "Staff", "Document catalogue"]);
   });
-  it("staff get Home, My Queue and Obligations (no Import)", async () => {
-    expect(await menu("staff")).toEqual(["Home", "My Queue", "Obligations"]);
+  it("staff get Home, My Queue, Obligations and Estates (no Import)", async () => {
+    expect(await menu("staff")).toEqual(["Home", "My Queue", "Obligations", "Estates"]);
   });
-  it.each(["sales", "viewer"])("%s gets no queue", async (role) => {
-    expect(await menu(role)).toEqual(["Home", "Obligations"]);
+  it.each(["sales", "viewer"])("%s gets no queue, and gets Estates", async (role) => {
+    expect(await menu(role)).toEqual(["Home", "Obligations", "Estates"]);
   });
   it("shows the company, name and role in the top bar", async () => {
     mockApi(baseRoutes("staff"));

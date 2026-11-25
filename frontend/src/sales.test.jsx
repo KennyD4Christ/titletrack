@@ -7,6 +7,7 @@ import { todayIso } from "./utils/sales.js";
 import salesList from "./test/fixtures/sales_list.json";
 import saleDetail from "./test/fixtures/sale_detail.json";
 import buyerSearch from "./test/fixtures/buyer_search.json";
+import { board } from "./test/inventoryHelpers.jsx";
 
 const id = saleDetail.id;
 const body = (c) => JSON.parse(c.init.body);
@@ -20,6 +21,7 @@ const routes = (extra = {}, role = "manager") =>
     [`GET /api/sales-desk/${id}/`]: saleDetail,
     "GET /api/sales-desk/buyer-search/": buyerSearch,
     "GET /api/sale-documents/": { count: 0, next: null, previous: null, results: [] },
+    "GET /api/plot-board/": board(role),
     ...extra,
   });
 
@@ -110,14 +112,16 @@ describe("add a sale", () => {
     return { api, dialog };
   };
 
-  it("adds a sale for a new estate and a new buyer, then opens it", async () => {
+  it("adds a sale for an existing estate and a new buyer, then opens it", async () => {
     document.cookie = "csrftoken=abc; path=/";
     const { api, dialog } = await openAdd({ "POST /api/sales-desk/": () => json(saleDetail, 201) });
     const submit = within(dialog).getByRole("button", { name: "Add sale" });
     expect(submit).toBeDisabled();
-    await userEvent.selectOptions(within(dialog).getByLabelText("Estate"), "New estate…");
-    await userEvent.type(within(dialog).getByLabelText("New estate name"), "Lakeside Meadows");
-    await userEvent.type(within(dialog).getByLabelText("Plot number"), "N-1");
+    await userEvent.selectOptions(within(dialog).getByLabelText("Estate"), estate.name);
+    await userEvent.selectOptions(
+      within(dialog).getByLabelText("Registered available plot"),
+      "A-1",
+    );
     await userEvent.type(within(dialog).getByLabelText("Buyer name"), "Ada Obi");
     await userEvent.type(within(dialog).getByLabelText("Phone (optional)"), "0803 111 2222");
     await userEvent.type(within(dialog).getByLabelText("Price"), "1500000");
@@ -126,7 +130,7 @@ describe("add a sale", () => {
     await userEvent.click(submit);
     expect(await screen.findByText("Sale added.")).toBeInTheDocument();
     expect(body(calls(api, "POST", "/api/sales-desk/")[0])).toEqual({
-      estate_name: "Lakeside Meadows", plot_number: "N-1", buyer_name: "Ada Obi", phone: "0803 111 2222",
+      estate: estate.id, plot_number: "A-1", buyer_name: "Ada Obi", phone: "0803 111 2222",
       price: "1500000", amount_paid: "500000", sale_date: todayIso(),
     });
     expect(await screen.findByRole("heading", { name: saleDetail.buyer_name })).toBeInTheDocument();
@@ -136,7 +140,10 @@ describe("add a sale", () => {
     document.cookie = "csrftoken=abc; path=/";
     const { api, dialog } = await openAdd({ "POST /api/sales-desk/": () => json(saleDetail, 201) });
     await userEvent.selectOptions(within(dialog).getByLabelText("Estate"), estate.name);
-    await userEvent.type(within(dialog).getByLabelText("Plot number"), "A-9");
+    await userEvent.selectOptions(
+      within(dialog).getByLabelText("Registered available plot"),
+      "A-1",
+    );
     await userEvent.click(within(dialog).getByRole("radio", { name: "Existing buyer" }));
     await userEvent.type(within(dialog).getByLabelText("Find a buyer by name, phone or email"), "bayo");
     await userEvent.click(await within(dialog).findByRole("button", { name: /Bayo Lawal/ }));
@@ -145,19 +152,22 @@ describe("add a sale", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Add sale" }));
     await screen.findByText("Sale added.");
     expect(body(calls(api, "POST", "/api/sales-desk/")[0])).toEqual({
-      estate: estate.id, plot_number: "A-9", buyer: 701, price: "1000", sale_date: todayIso(),
+      estate: estate.id, plot_number: "A-1", buyer: 701, price: "1000", sale_date: todayIso(),
     });
   });
 
   it("names the current buyer when the plot is already sold, with a link to that sale", async () => {
     const { dialog } = await openAdd({
       "POST /api/sales-desk/": () => json({
-        detail: "Plot A-2 in Green Valley Estate already has an active sale to Bayo Lawal.",
+        detail: "Plot A-1 in Green Valley Estate already has an active sale to Bayo Lawal.",
         existing_sale: { id: 612, buyer: 701, buyer_name: "Bayo Lawal" },
       }, 409),
     });
     await userEvent.selectOptions(within(dialog).getByLabelText("Estate"), estate.name);
-    await userEvent.type(within(dialog).getByLabelText("Plot number"), "A-2");
+    await userEvent.selectOptions(
+      within(dialog).getByLabelText("Registered available plot"),
+      "A-1",
+    );
     await userEvent.type(within(dialog).getByLabelText("Buyer name"), "Someone Else");
     await userEvent.type(within(dialog).getByLabelText("Price"), "1000");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add sale" }));
@@ -170,7 +180,10 @@ describe("add a sale", () => {
   it("shows the server's message under the field it concerns", async () => {
     const { dialog } = await openAdd({ "POST /api/sales-desk/": () => json({ price: ["A valid number is required."] }, 400) });
     await userEvent.selectOptions(within(dialog).getByLabelText("Estate"), estate.name);
-    await userEvent.type(within(dialog).getByLabelText("Plot number"), "A-9");
+    await userEvent.selectOptions(
+      within(dialog).getByLabelText("Registered available plot"),
+      "A-1",
+    );
     await userEvent.type(within(dialog).getByLabelText("Buyer name"), "Ada Obi");
     await userEvent.type(within(dialog).getByLabelText("Price"), "abc");
     await userEvent.click(within(dialog).getByRole("button", { name: "Add sale" }));

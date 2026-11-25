@@ -7,10 +7,11 @@ from unittest import mock
 
 from api.permissions import MANAGER, MATRIX, MD
 from api.tests.test_sales_desk import DeskBase
+from tracker import inventory_services
 from tracker import document_services as catalogue
 from tracker import sale_document_services as docs
 from tracker import services
-from tracker.models import DocumentType, Obligation, ObligationEvent, ObligationType, Sale, SaleDocument, SaleEvent
+from tracker.models import DocumentType, Obligation, ObligationEvent, ObligationType, Plot, Sale, SaleDocument, SaleEvent
 
 OMITTED = ...                       # "do not send a documents field at all"
 INACTIVE = "This document type is inactive, so it cannot be added to a sale."
@@ -79,6 +80,13 @@ class LegacyCreationTests(DocumentsApiBase):
 
     def test_omitted_empty_and_null_need_only_the_add_sale_permission(self):
         narrowed = {"manage_sale_documents": {MD}, "issue_document": {MD}}      # the manager has neither now
+        for plot_number in ("N-2", "N-3"):
+            inventory_services.register_plot(
+                self.a,
+                self.manager,
+                estate=self.estate,
+                plot_number=plot_number,
+            )
         with mock.patch.dict(MATRIX, narrowed):
             self.assertEqual(self.create(plot_number="N-1").status_code, 201)
             self.assertEqual(self.create([], plot_number="N-2").status_code, 201)
@@ -248,10 +256,30 @@ class ValidationApiTests(DocumentsApiBase):
     def test_sale_level_problems_are_answered_exactly_as_before(self):
         response = self.refused([self.owed(self.a_entry)], price="0")
         self.assertIn("detail", response.data)
-        payload = dict(estate=self.estate.pk, estate_name="", plot_number="A-2", buyer_name="Someone Else")
+
+        plot_number = "OCC-1"
+        inventory_services.register_plot(
+            self.a,
+            self.manager,
+            estate=self.estate,
+            plot_number=plot_number,
+        )
+        plot = Plot.objects.get(estate=self.estate, plot_number=plot_number)
+        existing_sale = services.create_sale(
+            self.a, plot, self.s2.buyer, 1000, self.today, 400
+        )
+
+        payload = dict(
+            estate=self.estate.pk,
+            estate_name="",
+            plot_number=plot_number,
+            buyer_name="Someone Else",
+        )
         response = self.refused([self.owed(self.a_entry)], 409, **payload)
-        self.assertEqual((response.data["existing_sale"]["id"], response.data["existing_sale"]["buyer_name"]),
-                         (self.s2.pk, "Bayo Lawal"))
+        self.assertEqual(
+            (response.data["existing_sale"]["id"], response.data["existing_sale"]["buyer_name"]),
+            (existing_sale.pk, "Bayo Lawal"),
+        )
 
 
 class PermissionApiTests(DocumentsApiBase):
@@ -278,6 +306,13 @@ class PermissionApiTests(DocumentsApiBase):
             self.assertEqual(self.create([self.owed(self.entry_a)], user=self.md).status_code, 201)
 
     def test_an_issued_selection_needs_issue_document_as_well(self):
+        for plot_number in ("N-2", "N-3"):
+            inventory_services.register_plot(
+                self.a,
+                self.manager,
+                estate=self.estate,
+                plot_number=plot_number,
+            )
         with mock.patch.dict(MATRIX, {"issue_document": {MD}}):
             before = self.everything()
             self.assertEqual(self.create([self.issued(self.entry_a)], user=self.manager).status_code, 403)
@@ -299,7 +334,7 @@ class AtomicityApiTests(DocumentsApiBase):
         good, bad = self.entry("Survey Plan"), self.entry("Receipt")
         catalogue.set_document_type_active(bad, self.manager, False)
         before = self.everything()
-        response = self.create([self.owed(good), self.owed(bad)])                 # also a brand-new estate and buyer
+        response = self.create([self.owed(good), self.owed(bad)])
         self.assertEqual(response.status_code, 409, response.data)
         self.assertEqual(response.json(), {"documents": {"1": {"document_type": [INACTIVE]}}})
         self.assertEqual(self.everything(), before)

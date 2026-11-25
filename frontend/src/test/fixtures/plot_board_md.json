@@ -1,0 +1,40 @@
+{
+  "estate": {
+    "id": 5,
+    "name": "Green Valley Estate",
+    "location": "Lekki, Lagos"
+  },
+  "as_of": "2026-11-23T09:00:00Z",
+  "count": 4,
+  "truncated": false,
+  "plots": [
+    {
+      "id": 101,
+      "plot_number": "A-1",
+      "status": "available",
+      "payment_state": null,
+      "active_sale_id": null
+    },
+    {
+      "id": 110,
+      "plot_number": "A-10",
+      "status": "sold",
+      "payment_state": "fully_paid",
+      "active_sale_id": 613
+    },
+    {
+      "id": 102,
+      "plot_number": "A-2",
+      "status": "sold",
+      "payment_state": "part_paid",
+      "active_sale_id": 612
+    },
+    {
+      "id": 103,
+      "plot_number": "A-3",
+      "status": "available",
+      "payment_state": null,
+      "active_sale_id": null
+    }
+  ]
+}

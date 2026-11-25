@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mockApi } from "../test/helpers.jsx";
-import { listAllActiveDocumentTypes, listAllDocumentsOfSale, listAllDocumentTypes } from "./pagedLists.js";
+import { listAllActiveDocumentTypes, listAllDocumentsOfSale, listAllDocumentTypes, listAllEstates } from "./pagedLists.js";
 
 const pageOf = (url) => new URL(url, "http://localhost").searchParams.get("page");
 const row = (n) => ({ id: n });
@@ -31,6 +31,22 @@ describe("every page of a list", () => {
     expect(calls.map((c) => c.url)).toEqual([
       "/api/sale-documents/?sale=612&page=1&page_size=200",
       "/api/sale-documents/?sale=612&page=2&page_size=200",
+    ]);
+  });
+
+  it("follows every page of the company's estates", async () => {
+    const { calls } = mockApi({
+      "GET /api/estates/": (url) => (pageOf(url) === "1"
+        ? { count: 3, next: "http://localhost/api/estates/?page=2", previous: null, results: [row(1), row(2)] }
+        : { count: 3, next: null, previous: "http://localhost/api/estates/?page=1", results: [row(3)] }),
+    });
+
+    const data = await listAllEstates();
+
+    expect(data).toEqual({ count: 3, results: [row(1), row(2), row(3)] });
+    expect(calls.map((c) => c.url)).toEqual([
+      "/api/estates/?page=1&page_size=200",
+      "/api/estates/?page=2&page_size=200",
     ]);
   });
 
