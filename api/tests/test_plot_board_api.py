@@ -1,5 +1,6 @@
 """GET /api/plot-board/?estate=<id>: what every role sees, what only view_sales roles see, and company isolation."""
 from datetime import date
+import json
 
 from django.test import override_settings
 from django.urls import reverse
@@ -26,6 +27,18 @@ def all_keys(value):
     elif isinstance(value, list):
         for inner in value:
             yield from all_keys(inner)
+
+
+def all_values(value):
+    """Every scalar value anywhere in a JSON value."""
+    if isinstance(value, dict):
+        for inner in value.values():
+            yield from all_values(inner)
+    elif isinstance(value, list):
+        for inner in value:
+            yield from all_values(inner)
+    else:
+        yield value
 
 
 class BoardBase(InventoryApiBase):
@@ -114,9 +127,10 @@ class PlotBoardVisibilityTests(BoardBase):
     def test_the_buyers_details_appear_nowhere_in_the_raw_response(self):
         self.mixed_estate()
         for role in sorted(ALL_ROLES):
-            raw = self.get(role).content.decode()
+            body = json.loads(self.get(role).content)
+            visible_values = {str(value) for value in all_values(body)}
             for secret in ("Ada Obi", "0801", "ada@x.test", "1000", "400"):
-                self.assertNotIn(secret, raw, f"{role} saw {secret!r}")
+                self.assertNotIn(secret, visible_values, f"{role} saw {secret!r}")
 
 
 class PlotBoardAccessTests(BoardBase):

@@ -160,6 +160,7 @@ class Plot(models.Model):
     estate = models.ForeignKey(Estate, on_delete=models.CASCADE, related_name="plots")
     plot_number = models.CharField(max_length=50)
     import_batch = models.ForeignKey("ImportBatch", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    inventory_registered = models.BooleanField(default=False)
     # The canonical form of `plot_number`; see Estate.name_key. Unique per estate.
     plot_key = models.CharField(
         max_length=50 * MAX_CASEFOLD_GROWTH, default="", db_default="", blank=True, editable=False)

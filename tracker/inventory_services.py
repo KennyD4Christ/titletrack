@@ -281,7 +281,12 @@ def register_plot(company, actor, *, estate, plot_number):
         raise PlotCapExceeded(max_plots_per_estate(), count, 1)
     try:
         with transaction.atomic():
-            plot = Plot.objects.create(company=company, estate=locked, plot_number=label)
+            plot = Plot.objects.create(
+                company=company,
+                estate=locked,
+                plot_number=label,
+                inventory_registered=True,
+            )
     except IntegrityError:
         existing = Plot.objects.filter(estate=locked, plot_key=key).select_related("estate").first()
         if existing is None:
@@ -566,7 +571,15 @@ def commit_bulk(company, actor, *, estate, entries, input_fingerprint_sent, prev
     new_items = [item for item in classification.items if item["outcome"] == "new"]
     # Inserted in key order, so two bulk registrations that overlap take their index locks in the same order.
     ordered = sorted(new_items, key=lambda item: (item["key"], item["index"]))
-    plots = [Plot(company=company, estate=locked, plot_number=item["label"]) for item in ordered]
+    plots = [
+        Plot(
+            company=company,
+            estate=locked,
+            plot_number=item["label"],
+            inventory_registered=True,
+        )
+        for item in ordered
+    ]
     try:
         with transaction.atomic():
             created = _insert_plots(plots)
