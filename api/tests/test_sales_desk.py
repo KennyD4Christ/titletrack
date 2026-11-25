@@ -6,11 +6,20 @@ from django.urls import reverse
 
 from api.permissions import MANAGER, MATRIX, MD
 from api.tests.test_obligations import ObligationApiBase
-from tracker import services
+from tracker import inventory_services, services
 from tracker.models import Buyer, Estate, Obligation, Payment, Plot, Sale, SaleEvent
 
 
 class DeskBase(ObligationApiBase):
+    def setUp(self):
+        super().setUp()
+        inventory_services.register_plot(
+            self.a,
+            self.manager,
+            estate=self.estate,
+            plot_number="N-1",
+        )
+
     def post(self, user, name, pk=None, payload=None):
         self.client.force_authenticate(user)
         return self.client.post(reverse(name, args=[pk] if pk is not None else None), payload or {}, format="json")
@@ -37,8 +46,15 @@ class DeskBase(ObligationApiBase):
         return tuple(m.objects.count() for m in (Estate, Plot, Buyer, Sale, Payment, SaleEvent, Obligation))
 
     def new_sale_payload(self, **extra):
-        return {"estate_name": "Lakeside Meadows", "plot_number": "N-1", "buyer_name": "Ada Obi", "price": "1000",
-                "sale_date": self.today.isoformat(), **extra}
+        return {
+            "estate": self.estate.pk,
+            "estate_name": "",
+            "plot_number": "N-1",
+            "buyer_name": "Ada Obi",
+            "price": "1000",
+            "sale_date": self.today.isoformat(),
+            **extra,
+        }
 
 
 class SalesDeskPermissionTests(DeskBase):
@@ -164,20 +180,32 @@ class SalesDeskDetailTests(DeskBase):
 
 
 class AddSaleApiTests(DeskBase):
-    def test_adds_a_sale_with_a_new_estate_and_buyer(self):
+    def test_a_new_estate_and_an_unregistered_plot_are_refused(self):
         before = self.counts()
-        payload = self.new_sale_payload(phone="0803 111 2222", email="ada@example.com", price="1500000",
-                                        amount_paid="500000")
-        r = self.post(self.manager, "sales-desk-list", payload=payload)
-        self.assertEqual(r.status_code, 201, r.data)
-        self.assertEqual((r.data["estate_name"], r.data["plot_number"], r.data["buyer_name"]),
-                         ("Lakeside Meadows", "N-1", "Ada Obi"))
-        self.assertEqual((r.data["price"], r.data["amount_paid"]), ("1500000.00", "500000.00"))
-        self.assertEqual([(p["kind"], p["recorded_by_name"]) for p in r.data["payments"]], [("opening", "Mike")])
-        self.assertEqual([o["type_name"] for o in r.data["obligations"]], ["Allocation Letter"])
-        self.assertEqual((r.data["history"][0]["action"], r.data["history"][0]["actor_name"]), ("created", "Mike"))
-        self.assertEqual(Sale.objects.count(), before[3] + 1)
-        self.assertEqual(Estate.objects.count(), before[0] + 1)
+
+        # A new estate cannot be created through the Sales Desk.
+        payload = self.new_sale_payload()
+        payload.pop("estate")
+        payload["estate_name"] = "Lakeside Meadows"
+        response = self.post(
+            self.manager,
+            "sales-desk-list",
+            payload=payload,
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("detail", response.data)
+
+        # An unregistered plot in an existing estate cannot be sold either.
+        payload = self.new_sale_payload(plot_number="UNREGISTERED-1")
+        response = self.post(
+            self.manager,
+            "sales-desk-list",
+            payload=payload,
+        )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("detail", response.data)
+
+        self.assertEqual(self.counts(), before)
 
     def test_adds_a_sale_for_an_existing_estate_and_buyer_without_creating_duplicates(self):
         before = self.counts()
@@ -194,32 +222,71 @@ class AddSaleApiTests(DeskBase):
         self.assertEqual({o["type_name"] for o in r.data["obligations"]}, {"Allocation Letter", "Deed"})
 
     def test_a_plot_with_an_active_sale_is_refused_and_names_the_current_buyer(self):
+        plot_number = "OCC-1"
+        inventory_services.register_plot(
+            self.a,
+            self.manager,
+            estate=self.estate,
+            plot_number=plot_number,
+        )
+        plot = Plot.objects.get(estate=self.estate, plot_number=plot_number)
+        existing_sale = services.create_sale(
+            self.a, plot, self.s2.buyer, 1000, self.today, 400
+        )
         before = self.counts()
-        payload = self.new_sale_payload(estate=self.estate.pk, estate_name="", plot_number="a-2",
-                                        buyer_name="Someone Else")
+
+        payload = self.new_sale_payload(
+            plot_number=plot_number,
+            buyer_name="Someone Else",
+        )
         r = self.post(self.manager, "sales-desk-list", payload=payload)
-        self.assertEqual(r.status_code, 409)
+
+        self.assertEqual(r.status_code, 409, r.data)
         self.assertIn("Bayo Lawal", r.data["detail"])
-        self.assertEqual((r.data["existing_sale"]["id"], r.data["existing_sale"]["buyer_name"]),
-                         (self.s2.pk, "Bayo Lawal"))
+        self.assertEqual(
+            (r.data["existing_sale"]["id"], r.data["existing_sale"]["buyer_name"]),
+            (existing_sale.pk, "Bayo Lawal"),
+        )
         self.assertEqual(self.counts(), before)
 
     def test_a_cancelled_sale_frees_the_plot(self):
-        services.cancel_sale(self.s2, self.manager, "defaulted")
-        payload = self.new_sale_payload(estate=self.estate.pk, estate_name="", plot_number="A-2", buyer_name="New Buyer")
-        self.assertEqual(self.post(self.manager, "sales-desk-list", payload=payload).status_code, 201)
+        plot_number = "FREE-1"
+        inventory_services.register_plot(
+            self.a,
+            self.manager,
+            estate=self.estate,
+            plot_number=plot_number,
+        )
+        plot = Plot.objects.get(estate=self.estate, plot_number=plot_number)
+        existing_sale = services.create_sale(
+            self.a, plot, self.s2.buyer, 1000, self.today, 400
+        )
+        services.cancel_sale(existing_sale, self.manager, "defaulted")
+
+        payload = self.new_sale_payload(
+            plot_number=plot_number,
+            buyer_name="New Buyer",
+        )
+        response = self.post(self.manager, "sales-desk-list", payload=payload)
+
+        self.assertEqual(response.status_code, 201, response.data)
 
     def test_bad_input_is_refused_and_nothing_is_written(self):
         before = self.counts()
         cases = {
             "price zero": {"price": "0"}, "price text": {"price": "abc"}, "too many decimals": {"price": "10.505"},
             "paid more than price": {"amount_paid": "1500"}, "future date": {"sale_date": (self.today + timedelta(days=9)).isoformat()},
-            "no buyer": {"buyer_name": ""}, "no estate": {"estate_name": ""}, "bad email": {"email": "nope"},
+            "no buyer": {"buyer_name": ""}, "bad email": {"email": "nope"},
             "no plot": {"plot_number": ""}, "bad date": {"sale_date": "31/02/2026"},
         }
         for label, extra in cases.items():
             r = self.post(self.manager, "sales-desk-list", payload=self.new_sale_payload(**extra))
             self.assertEqual(r.status_code, 400, f"{label}: {r.data}")
+        payload = self.new_sale_payload()
+        payload.pop("estate")
+        payload["estate_name"] = ""
+        r = self.post(self.manager, "sales-desk-list", payload=payload)
+        self.assertEqual(r.status_code, 400, r.data)
         payload = self.new_sale_payload()
         del payload["sale_date"]
         r = self.post(self.manager, "sales-desk-list", payload=payload)

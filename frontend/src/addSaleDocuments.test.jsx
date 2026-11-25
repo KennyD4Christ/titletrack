@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
 import AddSaleModal from "./components/sales/AddSaleModal.jsx";
 import { AUTOMATIC_NOTE, CHOOSE_HINT } from "./utils/newSaleDocuments.js";
 import { todayIso } from "./utils/sales.js";
+import { board } from "./test/inventoryHelpers.jsx";
 
 import documentTypes from "./test/fixtures/document_types.json";
 
@@ -28,7 +29,7 @@ const emptyList = { count: 0, next: null, previous: null, results: [] };
 const INACTIVE = "This document type is inactive, so it cannot be added to a sale.";
 const BAD_DATE = "Issue date is implausible (before 1990 or in the future).";
 const LONG_REFERENCE = "Reference is too long (maximum 120 characters).";
-const BASE_BODY = { estate: estate.id, plot_number: "A-9", buyer_name: "Ada Obi", price: "1000", sale_date: todayIso() };
+const BASE_BODY = { estate: estate.id, plot_number: "A-1", buyer_name: "Ada Obi", price: "1000", sale_date: todayIso() };
 
 const BP = "Building Permit";              // id 50
 const COO = "Certificate of Occupancy";    // id 48
@@ -45,6 +46,7 @@ const open = async ({ role = "manager", extra = {} } = {}) => {
   document.cookie = "csrftoken=abc; path=/";
   const api = mockApi(baseRoutes(role, {
     "GET /api/document-types/": documentTypes,
+    "GET /api/plot-board/": board(role),
     "POST /api/sales-desk/": () => json({ id: 612 }, 201),
     ...extra,
   }));
@@ -67,7 +69,10 @@ const open = async ({ role = "manager", extra = {} } = {}) => {
 
 const fillSale = async (dialog) => {
   await userEvent.selectOptions(within(dialog).getByLabelText("Estate"), estate.name);
-  await userEvent.type(within(dialog).getByLabelText("Plot number"), "A-9");
+  await userEvent.selectOptions(
+    within(dialog).getByLabelText("Registered available plot"),
+    "A-1",
+  );
   await userEvent.type(within(dialog).getByLabelText("Buyer name"), "Ada Obi");
   await userEvent.type(within(dialog).getByLabelText("Price"), "1000");
 };

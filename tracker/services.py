@@ -13,6 +13,7 @@ from .importing import clean_amount, clean_date
 from .models import (
     Buyer, Estate, Obligation, ObligationEvent, ObligationType, Payment, Plot, Sale, SaleDocument, SaleEvent,
 )
+from .canonical import canonical_key
 
 
 class SaleStateError(Exception):
@@ -373,7 +374,8 @@ def _get_or_create_plot(company, estate, number):
 
 @transaction.atomic
 def add_sale(company, actor, *, plot_number, price, sale_date, estate=None, estate_name="", buyer=None,
-             buyer_name="", phone="", email="", amount_paid=0, paid_on=None, documents_managed=False):
+             buyer_name="", phone="", email="", amount_paid=0, paid_on=None, documents_managed=False,
+             require_registered_plot=False):
     """Direct entry of a new sale. Everything is checked first and written in one transaction, so a refusal
     leaves nothing behind (no stray estate, plot or buyer). A new buyer is ALWAYS a new person: buyers are
     never merged on name alone. To reuse a person, pass `buyer`.
@@ -400,6 +402,8 @@ def add_sale(company, actor, *, plot_number, price, sale_date, estate=None, esta
         paid_on = None
 
     plot_number = _required_text(plot_number, "Plot number", 50)
+    if require_registered_plot and estate is None:
+        raise ValueError("Select an existing estate.")
     if estate is not None:
         if estate.company_id != company.pk:
             raise PermissionDenied("Estate belongs to another company.")
@@ -423,7 +427,20 @@ def add_sale(company, actor, *, plot_number, price, sale_date, estate=None, esta
                 raise ValueError("Email address is too long.")
 
     estate = estate or _get_or_create_estate(company, estate_name)
-    plot = _get_or_create_plot(company, estate, plot_number)
+    if require_registered_plot:
+        plot = Plot.objects.filter(
+            company=company,
+            estate=estate,
+            plot_key=canonical_key(plot_number),
+            inventory_registered=True,
+        ).first()
+        if plot is None:
+            raise ValueError(
+                f"Plot {plot_number!r} is not registered in {estate.name}. "
+                "Register it in Estates before recording the sale."
+            )
+    else:
+        plot = _get_or_create_plot(company, estate, plot_number)
     current = _active_sale_on(plot)
     if current is not None:
         raise PlotOccupied(current)
