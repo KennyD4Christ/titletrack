@@ -20,6 +20,10 @@ async function fetchAllPages(path, params) {
 /** Every active catalogue entry. Everyone can read the catalogue (view_reference). */
 export const listAllActiveDocumentTypes = () => fetchAllPages("/api/document-types/", { is_active: true });
 
+/** Every estate of the company. Unlike obligations.js listEstates, which asks for one page of 200 and returns only
+ *  the rows, this follows the pages and reports `count`, so a caller can tell when the list is incomplete. */
+export const listAllEstates = () => fetchAllPages("/api/estates/", {});
+
 /** Every catalogue entry, active or not, for the catalogue page. */
 export const listAllDocumentTypes = () => fetchAllPages("/api/document-types/", {});
 
